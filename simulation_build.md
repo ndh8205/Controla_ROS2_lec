@@ -58,22 +58,27 @@ wsl --install -d Ubuntu-24.04
 
 ### 2.1 Locale 설정
 ```bash
-sudo apt update
-sudo apt install -y locales
+sudo apt update && sudo apt install -y locales
+```
+```bash
 sudo locale-gen en_US en_US.UTF-8
+```
+```bash
 sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
+```
+```bash
 export LANG=en_US.UTF-8
 ```
 
 ### 2.2 ROS 2 저장소 추가
 ```bash
-sudo apt install -y curl
-sudo apt install -y gnupg2
-sudo apt install -y lsb-release
-
+sudo apt install -y curl gnupg2 lsb-release
+```
+```bash
 sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
   -o /usr/share/keyrings/ros-archive-keyring.gpg
-
+```
+```bash
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
 http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" | \
 sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
@@ -82,18 +87,31 @@ sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
 ### 2.3 설치
 ```bash
 sudo apt update
+```
+```bash
 sudo apt install -y ros-jazzy-desktop
+```
+```bash
 sudo apt install -y python3-colcon-common-extensions
+```
+```bash
 sudo apt install -y python3-rosdep
+```
+```bash
 sudo apt install -y python3-vcstool
 ```
 
 ### 2.4 rosdep 초기화
 ```bash
 echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
+```
+```bash
 source ~/.bashrc
-
+```
+```bash
 sudo rosdep init || true
+```
+```bash
 rosdep update
 ```
 
@@ -110,21 +128,31 @@ ros2 topic list
 ### 3.1 OSRF 저장소 추가
 ```bash
 sudo apt install -y wget
+```
+```bash
 sudo wget https://packages.osrfoundation.org/gazebo.gpg \
   -O /usr/share/keyrings/gazebo-archive-keyring.gpg
-
+```
+```bash
 echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gazebo-archive-keyring.gpg] \
 http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | \
 sudo tee /etc/apt/sources.list.d/gazebo-stable.list
-
+```
+```bash
 sudo apt update
 ```
 
 ### 3.2 설치
 ```bash
 sudo apt install -y gz-harmonic
+```
+```bash
 sudo apt install -y ros-jazzy-ros-gz
+```
+```bash
 sudo apt install -y ros-jazzy-image-transport
+```
+```bash
 sudo apt install -y ros-jazzy-web-video-server
 ```
 
@@ -173,8 +201,9 @@ glxinfo | grep "OpenGL renderer"
 ### 5.1 소스 클론
 
 ```bash
-mkdir -p ~/space_ros_ws/src
-cd ~/space_ros_ws/src
+mkdir -p ~/space_ros_ws/src && cd ~/space_ros_ws/src
+```
+```bash
 git clone https://github.com/ndh8205/Controla_ROS2_lec.git orbit_sim
 ```
 
@@ -182,8 +211,14 @@ git clone https://github.com/ndh8205/Controla_ROS2_lec.git orbit_sim
 
 ```bash
 cd ~/space_ros_ws
+```
+```bash
 rosdep install --from-paths src --ignore-src -r -y
+```
+```bash
 colcon build --symlink-install
+```
+```bash
 source install/setup.bash
 ```
 
