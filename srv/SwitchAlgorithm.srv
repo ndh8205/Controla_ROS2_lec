@@ -1,5 +1,0 @@
-# orbit_sim_interfaces/srv/SwitchAlgorithm.srv
-int32 algorithm_id
----
-bool success
-string current_algorithm

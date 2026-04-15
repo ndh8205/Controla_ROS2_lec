@@ -15,12 +15,8 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>tf2_geometry_msgs</exec_depend>
-  <exec_depend>python3-opencv</exec_depend>
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>ros2launch</exec_depend>
-  <exec_depend>cv_bridge</exec_depend>
-  <exec_depend>image_transport</exec_depend>
-  <exec_depend>web_video_server</exec_depend>
   
   <exec_depend>ros_gz_bridge</exec_depend>
   <exec_depend>ros_gz_interfaces</exec_depend>
