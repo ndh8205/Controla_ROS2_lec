@@ -63,6 +63,17 @@ ros2 topic hz /model/nasa_satellite5/odometry
 ros2 topic list
 ```
 
+### 카메라 영상 확인
+
+```bash
+# GUI 뷰어
+ros2 run rqt_image_view rqt_image_view
+# 드롭다운에서 /nasa_satellite5/camera 선택
+
+# 웹 브라우저 (web_video_server 자동 실행)
+# http://localhost:8080/stream?topic=/nasa_satellite5/camera
+```
+
 ### 데이터 녹화 (ros2 bag)
 
 ```bash
@@ -119,6 +130,7 @@ orbit_sim/
 |------|------|------|
 | `/model/<sat>/odometry` | `nav_msgs/Odometry` | 위성 위치/속도 |
 | `/<sat>/imu` | `sensor_msgs/Imu` | IMU 데이터 |
+| `/<sat>/camera` | `sensor_msgs/Image` | 카메라 영상 |
 | `/<sat>/camera` | `sensor_msgs/Image` | 카메라 영상 |
 | `/model/<sat>/apply_world_wrench` | `gz.msgs.EntityWrench` | 제어 입력 (힘) |
 
