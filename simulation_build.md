@@ -115,7 +115,9 @@ gz sim --version
 
 ---
 
-## 4. GPU 렌더링 설정 (NVIDIA)
+## 4. GPU 렌더링 설정 (NVIDIA) - 추후 PC에서 작업하는 사람들 권장
+
+이 작업은 추후 PC에서 작업하는 사람들을 대상으로 하므로 이번 실습에서는 넘어가도 무방
 
 WSL2에서 NVIDIA GPU로 Gazebo를 렌더링하려면:
 
@@ -164,9 +166,9 @@ colcon build --symlink-install
 source install/setup.bash
 ```
 
-### 5.3 Zone.Identifier 제거 (Windows에서 복사한 경우)
+### 5.3 Zone.Identifier 제거 (Windows에서 복사한 경우에만 진행)
 
-Windows에서 WSL로 파일을 복사하면 `Zone.Identifier` 메타파일이 생길 수 있습니다:
+Windows에서 WSL로 파일을 복사하면 `Zone.Identifier` 메타파일이 생기게 되고 ROS 빌드과정에서 오류가 발생함:
 ```bash
 find ~/space_ros_ws/src -name "*:Zone.Identifier*" -delete
 ```
@@ -202,7 +204,7 @@ source ~/.bashrc
 
 ## 7. 시뮬레이션 실행
 
-### 7.1 GCO 근접운전 시뮬레이션
+### 7.1 GCO 근접 편대 시뮬레이션
 
 ```bash
 ros2 launch orbit_sim gco_test.launch.py
