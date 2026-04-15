@@ -339,7 +339,29 @@ mkdir -p ~/space_ros_ws/src && cd ~/space_ros_ws/src
 git clone https://github.com/ndh8205/Controla_ROS2_lec.git orbit_sim
 ```
 
-### 6.2 의존성 설치 및 빌드
+### 6.2 `gz_cw_dynamics` 클론 (세미나 Part 2 용)
+
+이 패키지가 CW 동역학, 추력기, 반작용휠, 궤도 IMU, 별센서, GPS, SGP4 chief 전파기를 제공합니다.
+
+```bash
+cd ~/space_ros_ws/src
+```
+```bash
+git clone https://github.com/ndh8205/gz_cw_dynamics.git
+```
+
+### 6.3 추가 의존성 (sgp4 + gz python)
+
+```bash
+sudo apt install -y \
+    python3-sgp4 \
+    python3-gz-transport13 \
+    python3-gz-msgs10 \
+    ros-jazzy-ros-gz-image \
+    ros-jazzy-ros-gz-bridge
+```
+
+### 6.4 의존성 설치 및 빌드
 
 ```bash
 cd ~/space_ros_ws
@@ -348,13 +370,13 @@ cd ~/space_ros_ws
 rosdep install --from-paths src --ignore-src -r -y
 ```
 ```bash
-colcon build --symlink-install
+colcon build --symlink-install --packages-select orbit_sim gz_cw_dynamics
 ```
 ```bash
 source install/setup.bash
 ```
 
-### 6.3 Zone.Identifier 제거 (Windows에서 복사한 경우에만 진행)
+### 6.5 Zone.Identifier 제거 (Windows에서 복사한 경우에만 진행)
 
 Windows에서 WSL로 파일을 복사하면 `Zone.Identifier` 메타파일이 생기게 되고 ROS 빌드과정에서 오류가 발생함:
 ```bash
@@ -375,8 +397,11 @@ source ~/space_ros_ws/install/setup.bash
 # Gazebo 모델 경로
 export GZ_SIM_RESOURCE_PATH=$GZ_SIM_RESOURCE_PATH:~/space_ros_ws/install/orbit_sim/share/orbit_sim/models
 
-# Gazebo 플러그인 경로
-export GZ_SIM_SYSTEM_PLUGIN_PATH=/opt/ros/jazzy/lib:$GZ_SIM_SYSTEM_PLUGIN_PATH
+# Gazebo 플러그인 경로 (orbit_sim + gz_cw_dynamics)
+export GZ_SIM_SYSTEM_PLUGIN_PATH=~/space_ros_ws/install/gz_cw_dynamics/lib:/opt/ros/jazzy/lib:$GZ_SIM_SYSTEM_PLUGIN_PATH
+
+# ROS 2 DDS 도메인 (강사가 공지하는 값 사용, 전원 동일해야 토픽 공유됨)
+export ROS_DOMAIN_ID=7
 
 # GPU 렌더링 (NVIDIA)
 export LD_LIBRARY_PATH=/usr/lib/wsl/lib:$LD_LIBRARY_PATH
@@ -482,6 +507,89 @@ ros2 bag play <bag_directory>
 pkill -f gz && pkill -f ros2
 ```
 
+또는 orbit_sim 제공 스크립트:
+```bash
+bash ~/kill_sim.sh
+```
+
+---
+
+## 8b. 세미나 Part 2 — SSA 미션 (gz_cw_dynamics)
+
+### 8b.1 미션 월드 실행 (메인 데스크탑만)
+
+```bash
+bash ~/kill_sim.sh
+ros2 launch gz_cw_dynamics mission.launch.py
+```
+
+구성:
+- **Chief** (intel_sat_dummy) — 원점 고정, 545 km SSO
+- **deputy_formation** (nasa_satellite) — `(0, +5000, 0)` m, 팀 1 담당
+- **deputy_docking** (nasa_satellite2) — `(0, -5000, 0)` m, 팀 2 담당
+- 각 deputy 에 CW 동역학, 6 추력기, 3 반작용휠, IMU, 별센서, GPS 부착
+- 3 초 후 `chief_propagator_node` 자동 시작 (Keplerian truth + SGP4 TLE 추정 + sun 벡터)
+
+### 8b.2 학생 스타터 명령 (개인 노트북)
+
+```bash
+# 추력기 (병진)
+ros2 run gz_cw_dynamics thruster_commander.py \
+    --deputy deputy_docking --axis fy_plus --throttle 0.5 --duration 2
+
+# 반작용휠 (자세)
+ros2 run gz_cw_dynamics rw_commander.py \
+    --deputy deputy_docking --axis z --torque 0.001 --duration 3
+
+# 센서 모니터링
+ros2 run gz_cw_dynamics sensor_monitor.py --deputy deputy_formation
+
+# 카메라 저장
+ros2 run gz_cw_dynamics camera_saver.py --deputy deputy_docking --out /tmp/frames
+```
+
+### 8b.3 주요 토픽
+
+**Chief 공유**
+- `/chief/eci_truth` — Keplerian 진실 (센서 내부용)
+- `/chief/eci_state` — **SGP4+noise TLE 추정** (학생 네비게이션용)
+- `/chief/sun_vector_lvlh` — 태양 방향 벡터 (LVLH)
+
+**Deputy 별** (`deputy_formation` / `deputy_docking`)
+- `/deputy_*/imu/data` — LVLH-aware IMU
+- `/deputy_*/star_tracker/attitude` — body-in-ECI 쿼터니언
+- `/deputy_*/gps/odometry` — ECI 위치/속도 + 노이즈
+- `/deputy_*/thruster/{fx,fy,fz}_{plus,minus}/cmd` — 6 추력기 명령 (Float32 [0,1])
+- `/deputy_*/rw/{x,y,z}/cmd` — 3 반작용휠 토크 명령 (Float32 N·m)
+- `/nasa_satellite(2)/camera` — 탑재 카메라 (gz transport)
+
+### 8b.4 RTF 조정 (원거리 접근 시)
+
+5 km 구간은 실시간이 지루함 → 빠르게 감기:
+```bash
+gz service -s /world/mission/set_physics \
+    --reqtype gz.msgs.Physics --reptype gz.msgs.Boolean --timeout 1000 \
+    --req 'max_step_size: 0.01, real_time_factor: 30.0'
+```
+
+근접 구간 (1 km 이내) 은 RTF=1 로 복귀 권장.
+
+### 8b.5 전체 시스템 검증 (세미나 전 리허설)
+
+```bash
+bash ~/space_ros_ws/install/gz_cw_dynamics/lib/gz_cw_dynamics/run_full_system_test.sh
+```
+
+6 항목 (CW 3-orbit, 추력기 6 방향, IMU, Chief 전파, 반작용휠 3축, 종합 센서 7 체크) 자동 수행. 약 5분 30초. 모두 PASS 면 인프라 준비 완료.
+
+### 8b.6 팀 브리프
+
+세부 미션 설명:
+- 팀 1 (4명, GCO 50 m 포메이션 + chief 사진):
+  `~/space_ros_ws/install/gz_cw_dynamics/share/gz_cw_dynamics/docs/team1_formation_brief.md`
+- 팀 2 (3명, 5 km → 도킹):
+  `~/space_ros_ws/install/gz_cw_dynamics/share/gz_cw_dynamics/docs/team2_docking_brief.md`
+
 ---
 
 ## 9. 트러블슈팅
@@ -499,6 +607,11 @@ pkill -f gz && pkill -f ros2
 | 카메라 토픽 안 보임 | `ros2 topic list \| grep camera`로 bridge 확인, Gazebo 센서 활성화 확인 |
 | web_video_server 접속 안 됨 | `ros2 node list`에서 web_video_server 실행 확인, 포트 8080 충돌 체크 |
 | rqt_image_view 검은 화면 | 토픽 선택 후 몇 초 대기, Gazebo가 먼저 실행 완료되었는지 확인 |
+| gz_cw_dynamics 플러그인 로딩 실패 | `GZ_SIM_SYSTEM_PLUGIN_PATH` 에 `~/space_ros_ws/install/gz_cw_dynamics/lib` 포함 확인 |
+| `python3-sgp4` 없음 | `sudo apt install -y python3-sgp4` 설치 |
+| 학생 노트북에서 토픽 안 보임 | `ROS_DOMAIN_ID` 모든 기기 동일, 동일 LAN 확인 |
+| Gazebo 창 프리즈 (반복 실행 후) | Windows PowerShell 에서 `wsl --shutdown` 후 재접속 (WSLg 리셋) |
+| 전체 시스템 정상인지 확인 | `bash ~/space_ros_ws/install/gz_cw_dynamics/lib/gz_cw_dynamics/run_full_system_test.sh` |
 
 ### 클린 빌드 (빌드 오류 시)
 ```bash
