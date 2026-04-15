@@ -58,7 +58,8 @@ wsl --install -d Ubuntu-24.04
 
 ### 2.1 Locale 설정
 ```bash
-sudo apt update && sudo apt install -y locales
+sudo apt update
+sudo apt install -y locales
 sudo locale-gen en_US en_US.UTF-8
 sudo update-locale LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8
 export LANG=en_US.UTF-8
@@ -66,7 +67,10 @@ export LANG=en_US.UTF-8
 
 ### 2.2 ROS 2 저장소 추가
 ```bash
-sudo apt install -y curl gnupg2 lsb-release
+sudo apt install -y curl
+sudo apt install -y gnupg2
+sudo apt install -y lsb-release
+
 sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
   -o /usr/share/keyrings/ros-archive-keyring.gpg
 
@@ -78,13 +82,17 @@ sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
 ### 2.3 설치
 ```bash
 sudo apt update
-sudo apt install -y ros-jazzy-desktop python3-colcon-common-extensions python3-rosdep python3-vcstool
+sudo apt install -y ros-jazzy-desktop
+sudo apt install -y python3-colcon-common-extensions
+sudo apt install -y python3-rosdep
+sudo apt install -y python3-vcstool
 ```
 
 ### 2.4 rosdep 초기화
 ```bash
 echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
 source ~/.bashrc
+
 sudo rosdep init || true
 rosdep update
 ```
@@ -114,8 +122,10 @@ sudo apt update
 
 ### 3.2 설치
 ```bash
-sudo apt install -y gz-harmonic ros-jazzy-ros-gz \
-  ros-jazzy-image-transport ros-jazzy-web-video-server
+sudo apt install -y gz-harmonic
+sudo apt install -y ros-jazzy-ros-gz
+sudo apt install -y ros-jazzy-image-transport
+sudo apt install -y ros-jazzy-web-video-server
 ```
 
 ### 3.3 확인
@@ -163,7 +173,8 @@ glxinfo | grep "OpenGL renderer"
 ### 5.1 소스 클론
 
 ```bash
-mkdir -p ~/space_ros_ws/src && cd ~/space_ros_ws/src
+mkdir -p ~/space_ros_ws/src
+cd ~/space_ros_ws/src
 git clone https://github.com/ndh8205/Controla_ROS2_lec.git orbit_sim
 ```
 
