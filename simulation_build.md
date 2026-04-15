@@ -76,6 +76,16 @@ pwd
 ls
 ```
 
+폴더 생성:
+```bash
+mkdir my_folder
+```
+
+중간 경로까지 한번에 생성 (`-p`):
+```bash
+mkdir -p ~/space_ros_ws/src
+```
+
 폴더 이동:
 ```bash
 cd ~/space_ros_ws
@@ -86,9 +96,9 @@ cd ~/space_ros_ws
 cd ..
 ```
 
-폴더 생성:
+홈 폴더로 이동:
 ```bash
-mkdir my_folder
+cd ~
 ```
 
 폴더 생성 + 이동 (한번에):
@@ -99,6 +109,16 @@ mkdir -p ~/space_ros_ws/src && cd ~/space_ros_ws/src
 파일 내용 보기:
 ```bash
 cat ~/.bashrc
+```
+
+파일 복사:
+```bash
+cp 원본 대상
+```
+
+파일/폴더 이름 변경 또는 이동:
+```bash
+mv 원본 대상
 ```
 
 파일 삭제:
