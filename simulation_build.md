@@ -22,8 +22,8 @@
 
 ### 1.1 Ubuntu 24.04 설치
 
-PowerShell (관리자):
-```powershell
+CMD 또는 PowerShell (관리자):
+```cmd
 wsl --install -d Ubuntu-24.04
 ```
 
@@ -41,6 +41,16 @@ swap=2GB
 ```cmd
 wsl --shutdown
 ```
+
+### 1.3 빠른 초기화 (문제 발생 시)
+
+환경이 꼬였을 때 WSL을 완전히 초기화하고 재설치:
+```cmd
+wsl --terminate Ubuntu-24.04
+wsl --unregister Ubuntu-24.04
+wsl --install -d Ubuntu-24.04
+```
+> **주의:** `--unregister`는 해당 배포판의 모든 데이터를 삭제합니다. 필요한 파일은 먼저 백업하세요.
 
 ---
 
