@@ -417,8 +417,29 @@ source ~/.bashrc
 
 ## 8. 시뮬레이션 실행
 
-### 8.1 GCO 근접 편대 시뮬레이션
+### 8.1 세미나 Part 1 — 통합 인트로 런치
 
+하나의 명령어로 다음이 전부 켜집니다:
+
+- Gazebo Harmonic (다중 위성 월드, `gco_test.world`)
+- **3D LiDAR 포인트클라우드 브리지 + 누적 맵 매퍼**
+- 카메라 / IMU / Odometry ROS 2 브리지
+- **web_video_server** (브라우저에서 영상 스트림, http://localhost:8080)
+- SetEntityPose 서비스 브리지
+- 멀티 위성 CSV 궤적 컨트롤러 (LiDAR 탑재 nasa_satellite3 포함)
+
+```bash
+ros2 launch orbit_sim seminar_intro.launch.py
+```
+
+RViz 포인트클라우드 뷰도 자동으로 열려면:
+```bash
+ros2 launch orbit_sim seminar_intro.launch.py rviz:=true
+```
+
+### 8.1b (대안) 기본 GCO 시뮬레이션
+
+LiDAR 없이 GCO 편대만 보려면:
 ```bash
 ros2 launch orbit_sim gco_test.launch.py
 ```

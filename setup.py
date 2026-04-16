@@ -23,6 +23,8 @@ data_files_list = package_files('models')
 data_files_list.extend(package_files('worlds'))
 data_files_list.extend(package_files('launch'))
 data_files_list.extend(package_files('data'))
+if os.path.isdir('config'):
+    data_files_list.extend(package_files('config'))
 
 # Add package.xml and resource file
 data_files_list.append(('share/ament_index/resource_index/packages', ['resource/' + package_name]))
@@ -44,6 +46,8 @@ setup(
     entry_points={
         'console_scripts': [
             'multi_satellite_controller = orbit_sim.multi_satellite_controller:main',
+            'multi_satellite_controller_service = orbit_sim.multi_satellite_controller_service:main',
+            'pointcloud_mapper = orbit_sim.pointcloud_mapper:main',
             'gco_controller = orbit_sim.gco_controller:main',
             'orbit_LVLH_gco = orbit_sim.orbit_LVLH_gco:main',
         ],
