@@ -60,6 +60,24 @@ http://192.168.0.54:8080/stream?topic=/nasa_satellite2/camera  # 팀 2
 4. **`# TODO: 학생이 구현할 부분!`** — 제어 알고리즘을 여기에 넣으세요
 5. 종료 시 액추에이터 정지 (KeyboardInterrupt)
 
+## 완성 코드 vs 스캐폴드
+
+```
+student/
+├── completed/                ← 바로 실행 가능한 완성 예제
+│   ├── laptop_thruster.py    ← 추력기 점화 (argparse, throttle, duration)
+│   ├── laptop_rw.py          ← 반작용휠 토크 (argparse, torque, duration)
+│   └── laptop_monitor.py     ← 전 센서 통합 모니터 (IMU/ST/GPS/TLE/Sun)
+│
+├── attitude_controller.py    ← 자세 제어 스캐폴드 (TODO: PD 제어 구현)
+├── orbit_controller.py       ← 궤도 제어 스캐폴드 (TODO: 접근 전략 구현)
+├── vision_operator.py        ← 영상 스캐폴드 (TODO: VBN/캡처 구현)
+└── README.md                 ← 이 파일
+```
+
+**완성 코드** (`completed/`): 명령 1줄로 즉시 동작. 기능 확인/테스트용.
+**스캐폴드** (루트): 구조 + 센서 연결 완료, 제어 로직은 `# TODO` 로 비워둠. 학생이 채움.
+
 ## 각 역할이 해야 할 일
 
 ### 자세 제어 담당
