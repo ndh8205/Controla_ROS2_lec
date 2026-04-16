@@ -289,7 +289,8 @@ sudo apt install -y ros-jazzy-image-transport
 sudo apt install -y ros-jazzy-web-video-server
 ```
 ```bash
-sudo apt install -y ros-jazzy-rosbridge-suite python3-roslibpy
+sudo apt install -y ros-jazzy-rosbridge-suite
+pip3 install roslibpy
 ```
 
 ### 4.3 확인
@@ -733,7 +734,8 @@ netsh advfirewall firewall add rule name="ROS2 rosbridge" dir=in action=allow pr
 
 ```bash
 # WSL Ubuntu 터미널
-sudo apt install -y ros-jazzy-rosbridge-suite python3-roslibpy
+sudo apt install -y ros-jazzy-rosbridge-suite
+pip3 install roslibpy
 ```
 
 **Python 에서 토픽 구독 예시**:
