@@ -541,10 +541,11 @@ ros2 run gz_cw_dynamics camera_saver.py        --deputy deputy_formation --out /
 
 | 토픽 | URL (브라우저에서 접속) |
 |---|---|
-| `/nasa_satellite3/camera` | `http://192.168.0.54:8080/stream?topic=/nasa_satellite3/camera` |
-| `/nasa_satellite3/camera` | `http://192.168.0.54:8080/stream?topic=/nasa_satellite3/camera` |
-| `/nasa_satellite/camera`  | `http://192.168.0.54:8080/stream?topic=/nasa_satellite/camera` |
-| `/nasa_satellite2/camera` (Part 2) | `http://192.168.0.54:8080/stream?topic=/nasa_satellite2/camera` |
+| `/nasa_satellite/camera` (Part 1+2) | `http://192.168.0.54:8080/stream?topic=/nasa_satellite/camera` |
+| `/nasa_satellite2/camera` (Part 1+2) | `http://192.168.0.54:8080/stream?topic=/nasa_satellite2/camera` |
+| `/nasa_satellite3/camera` (Part 1) | `http://192.168.0.54:8080/stream?topic=/nasa_satellite3/camera` |
+| `/stereo/left/image_raw` (Part 1) | `http://192.168.0.54:8080/stream?topic=/stereo/left/image_raw` |
+| `/stereo/right/image_raw` (Part 1) | `http://192.168.0.54:8080/stream?topic=/stereo/right/image_raw` |
 
 전체 가용 토픽 목록: `http://192.168.0.54:8080/`
 
@@ -860,11 +861,15 @@ ros2 topic echo /nasa_satellite3/imu
 |---|---|---|
 | `/lidar/points_raw/points` | `sensor_msgs/PointCloud2` | nasa_satellite3 의 3D LiDAR 포인트클라우드 |
 | `/map_cloud` | `sensor_msgs/PointCloud2` | pointcloud_mapper 가 누적한 월드 프레임 맵 |
-| `/nasa_satellite3/camera` | `sensor_msgs/Image` | nasa_satellite3 카메라 |
-| `/nasa_satellite3/camera` | `sensor_msgs/Image` | nasa_satellite3 카메라 |
-| `/nasa_satellite/camera`  | `sensor_msgs/Image` | nasa_satellite 카메라 |
-| `/nasa_satellite3/imu` | `sensor_msgs/Imu` | IMU |
-| `/model/nasa_satellite3/odometry` | `nav_msgs/Odometry` | 위성 위치/속도 |
+| `/nasa_satellite/camera` | `sensor_msgs/Image` | nasa_satellite 카메라 |
+| `/nasa_satellite2/camera` | `sensor_msgs/Image` | nasa_satellite2 카메라 |
+| `/nasa_satellite3/camera` | `sensor_msgs/Image` | nasa_satellite3 카메라 (LiDAR 탑재) |
+| `/stereo/left/image_raw` | `sensor_msgs/Image` | nasa_satellite4 스테레오 좌 |
+| `/stereo/right/image_raw` | `sensor_msgs/Image` | nasa_satellite4 스테레오 우 |
+| `/nasa_satellite/imu` | `sensor_msgs/Imu` | nasa_satellite IMU |
+| `/nasa_satellite2/imu` | `sensor_msgs/Imu` | nasa_satellite2 IMU |
+| `/nasa_satellite3/imu` | `sensor_msgs/Imu` | nasa_satellite3 IMU |
+| `/nasa_satellite4/imu` | `sensor_msgs/Imu` | nasa_satellite4 IMU |
 | `/tf`, `/tf_static` | `tf2_msgs/TFMessage` | TF 트리 (nasa_satellite3 LiDAR 프레임 포함) |
 
 **서비스:**
@@ -900,9 +905,11 @@ ros2 run rqt_image_view rqt_image_view
 자동 실행된 서버에 접속:
 ```
 http://localhost:8080/                                    # 스트림 가능한 토픽 목록
-http://localhost:8080/stream?topic=/nasa_satellite3/camera
-http://localhost:8080/stream?topic=/nasa_satellite3/camera
 http://localhost:8080/stream?topic=/nasa_satellite/camera
+http://localhost:8080/stream?topic=/nasa_satellite2/camera
+http://localhost:8080/stream?topic=/nasa_satellite3/camera
+http://localhost:8080/stream?topic=/stereo/left/image_raw
+http://localhost:8080/stream?topic=/stereo/right/image_raw
 ```
 
 **방법 3: Gazebo GUI 내장 카메라 뷰**

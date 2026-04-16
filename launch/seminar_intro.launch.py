@@ -71,27 +71,32 @@ def generate_launch_description():
         output='screen',
     )
 
-    # --- 3. Camera bridges (rqt_image_view + web browser 용) --------------
-    # gco_test.world 에 포함된 모델: nasa_satellite, nasa_satellite2,
-    # nasa_satellite3, nasa_satellite4 (5 는 없음)
+    # --- 3. Camera bridges (전체 4 모델) ---------------------------------
+    # gco_test.world 모델: nasa_satellite(1), 2, 3, 4
     camera_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
         name='camera_bridge',
         arguments=[
-            '/nasa_satellite3/camera@sensor_msgs/msg/Image@gz.msgs.Image',
             '/nasa_satellite/camera@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/nasa_satellite2/camera@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/nasa_satellite3/camera@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/stereo/left/image_raw@sensor_msgs/msg/Image@gz.msgs.Image',
+            '/stereo/right/image_raw@sensor_msgs/msg/Image@gz.msgs.Image',
         ],
         output='screen',
     )
 
-    # --- 4. IMU + Odometry bridges (nasa_satellite3 = LiDAR 탑재 위성) ---
-    imu_odo_bridge = Node(
+    # --- 4. IMU bridges (전체 4 모델) + LiDAR Odometry -------------------
+    imu_bridge = Node(
         package='ros_gz_bridge',
         executable='parameter_bridge',
-        name='imu_odo_bridge',
+        name='imu_bridge',
         arguments=[
+            '/nasa_satellite/imu@sensor_msgs/msg/Imu@gz.msgs.IMU',
+            '/nasa_satellite2/imu@sensor_msgs/msg/Imu@gz.msgs.IMU',
             '/nasa_satellite3/imu@sensor_msgs/msg/Imu@gz.msgs.IMU',
+            '/nasa_satellite4/imu@sensor_msgs/msg/Imu@gz.msgs.IMU',
         ],
         output='screen',
     )
@@ -169,7 +174,7 @@ def generate_launch_description():
         csv1, csv2, csv3, time_scale, rviz_arg,
         gz,
         camera_bridge,
-        imu_odo_bridge,
+        imu_bridge,
         set_pose_bridge,
         web,
         delayed_controller,
