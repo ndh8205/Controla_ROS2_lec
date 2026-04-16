@@ -46,9 +46,62 @@ python3 vision_operator.py --host 192.168.0.54 --deputy deputy_docking
 ## 카메라 브라우저 URL
 
 ```
-http://192.168.0.54:8080/                                      # 전체 토픽 목록
-http://192.168.0.54:8080/stream?topic=/nasa_satellite/camera   # 팀 1
-http://192.168.0.54:8080/stream?topic=/nasa_satellite2/camera  # 팀 2
+http://192.168.0.54:8080/                                                              # 전체 목록
+
+# 탑재 카메라 (deputy 시점)
+http://192.168.0.54:8080/stream_viewer?topic=/nasa_satellite/camera&type=mjpeg         # 팀1 탑재
+http://192.168.0.54:8080/stream_viewer?topic=/nasa_satellite2/camera&type=mjpeg        # 팀2 탑재
+
+# 옵저버 카메라 (외부 시점 — 위성 모습 확인)
+http://192.168.0.54:8080/stream_viewer?topic=/observer/chief/camera&type=mjpeg         # Chief 근접
+http://192.168.0.54:8080/stream_viewer?topic=/observer/formation/camera&type=mjpeg     # 팀1 Deputy 근접
+http://192.168.0.54:8080/stream_viewer?topic=/observer/docking/camera&type=mjpeg       # 팀2 Deputy 근접
+```
+
+## 전체 명령어 모음 (복사용)
+
+### 서버 (플랫샛)
+```bash
+# 시뮬레이션 시작
+bash ~/kill_sim.sh
+ros2 launch gz_cw_dynamics mission.launch.py
+
+# 또는 headless (GUI 없이, 카메라 동작)
+ros2 launch gz_cw_dynamics mission.launch.py headless:=true
+```
+
+### 학생 노트북 — 설치 (1회)
+```bash
+sudo apt install -y ros-jazzy-rosbridge-suite python3-pip
+pip3 install roslibpy --break-system-packages
+cd ~/space_ros_ws/src
+git clone https://github.com/ndh8205/Controla_ROS2_lec.git orbit_sim
+git clone https://github.com/ndh8205/gz_cw_dynamics.git
+```
+
+### 학생 노트북 — 완성 예제 (바로 실행)
+```bash
+# 센서 통합 모니터 (자이로+가속도계+GPS+ST+TLE+Sun+상대거리)
+python3 student/completed/laptop_monitor.py --host 192.168.0.54 --deputy deputy_formation
+python3 student/completed/laptop_monitor.py --host 192.168.0.54 --deputy deputy_docking
+
+# 추력기 발사
+python3 student/completed/laptop_thruster.py --host 192.168.0.54 --deputy deputy_docking --axis fy_plus --throttle 0.5 --duration 2
+
+# 반작용휠 토크
+python3 student/completed/laptop_rw.py --host 192.168.0.54 --deputy deputy_docking --axis z --torque 0.002 --duration 1
+```
+
+### 학생 노트북 — 역할별 scaffold (TODO 구현)
+```bash
+# 자세 제어 (ST + 자이로 + 가속도계 → RW)
+python3 student/attitude_controller.py --host 192.168.0.54 --deputy deputy_formation
+
+# 궤도 제어 (GPS + TLE + 가속도계 → 추력기)
+python3 student/orbit_controller.py --host 192.168.0.54 --deputy deputy_docking
+
+# 영상 (카메라 브라우저 + 거리 모니터)
+python3 student/vision_operator.py --host 192.168.0.54 --deputy deputy_formation
 ```
 
 ## 코드 구조
