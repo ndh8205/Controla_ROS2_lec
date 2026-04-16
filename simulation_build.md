@@ -15,7 +15,8 @@
 6. [워크스페이스 구축 및 빌드](#6-워크스페이스-구축-및-빌드)
 7. [환경 변수 설정](#7-환경-변수-설정)
 8. [시뮬레이션 실행](#8-시뮬레이션-실행)
-9. [트러블슈팅](#9-트러블슈팅)
+9. [네트워크 설정 (서버/클라이언트)](#9-네트워크-설정-gaimsat-flatsat--rosbridge-방식)
+10. [트러블슈팅](#10-트러블슈팅)
 
 ---
 
@@ -415,398 +416,6 @@ source ~/.bashrc
 
 ---
 
-## 7b. 네트워크 설정 (GAIMSat FlatSat — rosbridge 방식)
-
-### 세미나 운영 모델
-
-> **플랫샛 (192.168.0.54)** 에서 Gazebo 가 돌고, **학생 노트북** 들은 자기 자리에서 WebSocket 으로 **그 시뮬레이션을 제어** 합니다.
->
-> 학생이 노트북에서 `thruster` 토픽을 publish → rosbridge → 플랫샛 Gazebo 의 Deputy 가 실제로 움직임. 센서 데이터 (IMU/GPS/ST/카메라) 는 그 반대 방향으로 노트북에 흘러옵니다.
-
-```
-[플랫샛 192.168.0.54]                         [학생 노트북 × 7]
-
-  Gazebo (mission.sdf)
-  ├─ deputy_formation (팀 1, 4명)
-  └─ deputy_docking   (팀 2, 3명)
-       │ ROS 2 플러그인 (DDS 로컬)
-       ▼
-  rosbridge_server :9090 ◄────── WebSocket ─────── roslibpy (Python)
-  web_video_server :8080 ◄────── HTTP ───────────── 브라우저
-
-노트북 → pub /deputy_*/thruster/*/cmd  → 플랫샛 Gazebo 적용 (위성 움직임)
-노트북 ← sub /deputy_*/imu/data        ← 플랫샛 센서 출력
-노트북 ← HTTP stream 카메라            ← 플랫샛 web_video_server
-```
-
-DDS 디스커버리 대신 **rosbridge** 를 써서 서브넷/방화벽 제약과 무관하게 동작합니다.
-
-### 구조
-
-```
-플랫샛 (.54) WSL2 → rosbridge_server (ws://192.168.0.54:9090)
-                         ↑ TCP / WebSocket (NAT·방화벽 무관)
-노트북들 (.22, .52 등) ──┘  (roslibpy / roslibjs 클라이언트)
-```
-
-### 7b.1 플랫샛 (서버) 설정
-
-```bash
-# WSL Ubuntu 터미널
-sudo apt install -y ros-jazzy-rosbridge-suite
-```
-
-서버 실행 (시뮬 launch 전 먼저 띄우거나 별도 터미널):
-```bash
-source /opt/ros/jazzy/setup.bash
-ros2 launch rosbridge_server rosbridge_websocket_launch.xml
-```
-
-**Windows 관리자 CMD** 에서 방화벽 허용 (1회만):
-```cmd
-netsh advfirewall firewall add rule name="ROS2 rosbridge" dir=in action=allow protocol=TCP localport=9090
-```
-
-### 7b.2 모든 노트북 (클라이언트) 설정
-
-```bash
-# WSL Ubuntu 터미널
-sudo apt install -y ros-jazzy-rosbridge-suite python3-roslibpy
-```
-
-**Python 에서 토픽 구독 예시**:
-```python
-import roslibpy
-client = roslibpy.Ros(host='192.168.0.54', port=9090)
-client.run()
-listener = roslibpy.Topic(client, '/deputy_formation/imu/data', 'sensor_msgs/Imu')
-listener.subscribe(lambda msg: print(msg))
-```
-
-**토픽 발행 예시** (추력기 명령):
-```python
-import roslibpy
-client = roslibpy.Ros(host='192.168.0.54', port=9090)
-client.run()
-pub = roslibpy.Topic(client, '/deputy_docking/thruster/fy_plus/cmd',
-                     'std_msgs/Float32')
-pub.publish(roslibpy.Message({'data': 0.5}))
-```
-
-### 7b.3 연결 확인
-
-플랫샛 측:
-```bash
-ros2 topic pub /test std_msgs/String "data: hello"
-```
-
-노트북 측 Python:
-```python
-import roslibpy
-c = roslibpy.Ros('192.168.0.54', 9090); c.run()
-t = roslibpy.Topic(c, '/test', 'std_msgs/String')
-t.subscribe(lambda m: print(m))   # "hello" 수신되면 성공
-```
-
-### 7b.4 주의사항
-
-- 학생 노트북의 **`ros2 topic echo` 같은 CLI 명령은 rosbridge 를 경유하지 않습니다**. DDS 기반이므로 같은 서브넷에서만 동작. 개인 노트북에서 플랫샛 토픽을 직접 `ros2 topic echo` 로 볼 수 없는 게 일반적. roslibpy 사용 필수.
-- 우리 스타터 스크립트 (`thruster_commander.py`, `sensor_monitor.py` 등) 는 rclpy 기반이라 **같은 머신에서만 동작**. 노트북에서 플랫샛 시뮬레이션 제어하려면 roslibpy 로 포팅하거나, 학생 코드를 플랫샛에서 실행.
-- **gz 토픽 (카메라 `/nasa_satellite/camera` 등)** 은 rosbridge 경유가 아니라 `ros_gz_bridge` 로 ROS 2 토픽화된 후에만 외부 공유됨. 브리지된 토픽 이름으로 roslibpy 구독.
-
-### 7b.5 전체 토픽 접근 방법 (Part 1 + Part 2)
-
-**세미나에서는 3가지 방식이 병존합니다**. 기존 로컬 방식도 그대로 유효, rosbridge/web 은 노트북용 추가 경로:
-
-| 방식 | 실행 위치 | 접근 | 장점 |
-|---|---|---|---|
-| **A. 로컬 rclpy** (기존) | **플랫샛** 자체 쉘 | `ros2 run gz_cw_dynamics thruster_commander.py ...` | 빠른 프로토타이핑, CLI 전체 |
-| **B. 원격 roslibpy** (신규) | **학생 노트북** Python | `client = roslibpy.Ros(host='192.168.0.54', ...)` | 자기 자리에서 시뮬 제어 |
-| **C. 브라우저** (신규) | **학생 노트북** 브라우저 | `http://192.168.0.54:8080/...` | 코드 없이 영상/상태 관찰 |
-
-- 이미지/비디오: **C (web_video_server)** 가 가장 빠름 (HTTP stream)
-- 나머지 토픽 (IMU, GPS, ST, Odometry, PointCloud2, 명령): **B (rosbridge)** 가 노트북에서 유일한 경로
-- 플랫샛 앞에 앉아 있다면 **A (로컬 rclpy)** 가 가장 단순
-
-참고 — 로컬 rclpy 방식 정리:
-```bash
-# 플랫샛 자체 쉘에서 (기존)
-ros2 run gz_cw_dynamics thruster_commander.py  --deputy deputy_docking --axis fy_plus --throttle 0.5 --duration 2
-ros2 run gz_cw_dynamics rw_commander.py        --deputy deputy_docking --axis z --torque 0.001 --duration 3
-ros2 run gz_cw_dynamics sensor_monitor.py      --deputy deputy_formation
-ros2 run gz_cw_dynamics camera_saver.py        --deputy deputy_formation --out /tmp/team1
-```
-
-#### 카메라 (web_video_server, 브라우저)
-
-| 토픽 | URL (브라우저에서 접속) |
-|---|---|
-| `/nasa_satellite/camera` (Part 1+2) | `http://192.168.0.54:8080/stream?topic=/nasa_satellite/camera` |
-| `/nasa_satellite2/camera` (Part 1+2) | `http://192.168.0.54:8080/stream?topic=/nasa_satellite2/camera` |
-| `/nasa_satellite3/camera` (Part 1) | `http://192.168.0.54:8080/stream?topic=/nasa_satellite3/camera` |
-| `/stereo/left/image_raw` (Part 1) | `http://192.168.0.54:8080/stream?topic=/stereo/left/image_raw` |
-| `/stereo/right/image_raw` (Part 1) | `http://192.168.0.54:8080/stream?topic=/stereo/right/image_raw` |
-
-전체 가용 토픽 목록: `http://192.168.0.54:8080/`
-
-#### 데이터 토픽 (roslibpy, Python)
-
-공통 서버 연결:
-```python
-import roslibpy
-client = roslibpy.Ros(host='192.168.0.54', port=9090)
-client.run()
-```
-
-**Part 1 — LiDAR 포인트클라우드**
-```python
-pc = roslibpy.Topic(client, '/lidar/points_raw/points',
-                    'sensor_msgs/PointCloud2')
-pc.subscribe(lambda m: print(f'points: width={m["width"]}'))
-```
-
-**Part 1 — 누적 맵**
-```python
-m = roslibpy.Topic(client, '/map_cloud', 'sensor_msgs/PointCloud2')
-m.subscribe(lambda msg: print(f'map width={msg["width"]}'))
-```
-
-**Part 1 — 위성 Odometry (nasa_satellite3)**
-```python
-odo = roslibpy.Topic(client, '/model/nasa_satellite3/odometry',
-                     'nav_msgs/Odometry')
-odo.subscribe(lambda m: print(
-    f"pos=({m['pose']['pose']['position']['x']:.2f}, "
-    f"{m['pose']['pose']['position']['y']:.2f}, "
-    f"{m['pose']['pose']['position']['z']:.2f})"))
-```
-
-**Part 1 — IMU (nasa_satellite3)**
-```python
-imu = roslibpy.Topic(client, '/nasa_satellite3/imu', 'sensor_msgs/Imu')
-imu.subscribe(lambda m: print(
-    f"gyro_z={m['angular_velocity']['z']:+.4e}"))
-```
-
-**Part 2 — Deputy IMU (궤도-aware)**
-```python
-imu = roslibpy.Topic(client, '/deputy_docking/imu/data',
-                     'sensor_msgs/Imu')
-imu.subscribe(lambda m: print(
-    f"gyro z={m['angular_velocity']['z']:+.4e} rad/s"))
-```
-
-**Part 2 — Deputy Star Tracker**
-```python
-st = roslibpy.Topic(client, '/deputy_docking/star_tracker/attitude',
-                    'geometry_msgs/QuaternionStamped')
-st.subscribe(lambda m: print(
-    f"q=({m['quaternion']['x']:+.4f}, {m['quaternion']['y']:+.4f}, "
-    f"{m['quaternion']['z']:+.4f}, {m['quaternion']['w']:+.4f})"))
-```
-
-**Part 2 — Deputy GPS (ECI)**
-```python
-gps = roslibpy.Topic(client, '/deputy_docking/gps/odometry',
-                     'nav_msgs/Odometry')
-gps.subscribe(lambda m: print(
-    f"r_ECI=({m['pose']['pose']['position']['x']:.1f}, "
-    f"{m['pose']['pose']['position']['y']:.1f}, "
-    f"{m['pose']['pose']['position']['z']:.1f}) m"))
-```
-
-**Part 2 — Chief TLE 추정**
-```python
-tle = roslibpy.Topic(client, '/chief/eci_state', 'nav_msgs/Odometry')
-tle.subscribe(lambda m: print(
-    f"chief r_ECI_TLE=({m['pose']['pose']['position']['x']:.1f}, ...)"))
-```
-
-**Part 2 — Sun 벡터 (LVLH)**
-```python
-sun = roslibpy.Topic(client, '/chief/sun_vector_lvlh',
-                     'geometry_msgs/Vector3Stamped')
-sun.subscribe(lambda m: print(
-    f"sun_lvlh=({m['vector']['x']:+.4f}, {m['vector']['y']:+.4f}, "
-    f"{m['vector']['z']:+.4f})"))
-```
-
-#### 제어 발행 (roslibpy)
-
-**추력기 0.5 throttle**:
-```python
-pub = roslibpy.Topic(client, '/deputy_docking/thruster/fy_plus/cmd',
-                     'std_msgs/Float32')
-pub.publish(roslibpy.Message({'data': 0.5}))
-```
-
-**반작용휠 +z 방향 1 mN·m 토크**:
-```python
-pub = roslibpy.Topic(client, '/deputy_docking/rw/z/cmd',
-                     'std_msgs/Float32')
-pub.publish(roslibpy.Message({'data': 0.001}))
-```
-
-(정지: `pub.publish(roslibpy.Message({'data': 0.0}))`)
-
-### 7b.6 노트북에서 바로 실행하는 roslibpy 스크립트 예시
-
-아래 세 파일을 학생 노트북에 저장 후 `python3 <파일>.py` 로 실행. **플랫샛 Gazebo 에 직접 영향을 줍니다** (추력기 점화, 휠 토크, 센서 관측).
-
-#### (1) `laptop_thruster.py` — 노트북에서 플랫샛 deputy 추력기 점화
-
-```python
-#!/usr/bin/env python3
-"""노트북 → 플랫샛 Gazebo deputy 추력기 명령 (rosbridge 경유)."""
-import argparse, time, roslibpy
-
-AXES = ('fx_plus','fx_minus','fy_plus','fy_minus','fz_plus','fz_minus')
-
-ap = argparse.ArgumentParser()
-ap.add_argument('--host',     default='192.168.0.54')
-ap.add_argument('--deputy',   default='deputy_docking')
-ap.add_argument('--axis',     choices=AXES, default='fy_plus')
-ap.add_argument('--throttle', type=float,   default=0.5)
-ap.add_argument('--duration', type=float,   default=2.0)
-args = ap.parse_args()
-
-client = roslibpy.Ros(host=args.host, port=9090); client.run()
-topic  = f'/{args.deputy}/thruster/{args.axis}/cmd'
-pub    = roslibpy.Topic(client, topic, 'std_msgs/Float32')
-
-print(f'[fire] {topic} throttle={args.throttle} for {args.duration}s')
-t_end = time.time() + args.duration
-while time.time() < t_end:
-    pub.publish(roslibpy.Message({'data': float(args.throttle)}))
-    time.sleep(0.05)
-pub.publish(roslibpy.Message({'data': 0.0}))
-print('[fire] stopped'); client.terminate()
-```
-
-실행:
-```bash
-python3 laptop_thruster.py --deputy deputy_docking --axis fy_plus --throttle 0.5 --duration 2
-```
-
-#### (2) `laptop_rw.py` — 노트북에서 플랫샛 deputy 반작용휠 토크
-
-```python
-#!/usr/bin/env python3
-"""노트북 → 플랫샛 deputy RW 토크 명령."""
-import argparse, time, roslibpy
-
-ap = argparse.ArgumentParser()
-ap.add_argument('--host',     default='192.168.0.54')
-ap.add_argument('--deputy',   default='deputy_docking')
-ap.add_argument('--axis',     choices=('x','y','z'), default='z')
-ap.add_argument('--torque',   type=float, default=0.001)  # N·m
-ap.add_argument('--duration', type=float, default=3.0)
-args = ap.parse_args()
-
-client = roslibpy.Ros(host=args.host, port=9090); client.run()
-topic  = f'/{args.deputy}/rw/{args.axis}/cmd'
-pub    = roslibpy.Topic(client, topic, 'std_msgs/Float32')
-
-print(f'[rw] {topic} tau={args.torque} Nm for {args.duration}s')
-t_end = time.time() + args.duration
-while time.time() < t_end:
-    pub.publish(roslibpy.Message({'data': float(args.torque)}))
-    time.sleep(0.05)
-pub.publish(roslibpy.Message({'data': 0.0}))
-print('[rw] stopped'); client.terminate()
-```
-
-#### (3) `laptop_monitor.py` — 노트북에서 플랫샛 deputy 센서 통합 모니터
-
-```python
-#!/usr/bin/env python3
-"""노트북 → 플랫샛 deputy 센서 통합 모니터 (IMU, ST, GPS, TLE chief, sun)."""
-import argparse, time, roslibpy
-from threading import Lock
-
-ap = argparse.ArgumentParser()
-ap.add_argument('--host',   default='192.168.0.54')
-ap.add_argument('--deputy', default='deputy_formation')
-args = ap.parse_args()
-
-client = roslibpy.Ros(host=args.host, port=9090); client.run()
-state, lock = {}, Lock()
-def put(k, v):
-    with lock: state[k] = v
-
-roslibpy.Topic(client, f'/{args.deputy}/imu/data',
-               'sensor_msgs/Imu').subscribe(lambda m: put('imu', m))
-roslibpy.Topic(client, f'/{args.deputy}/star_tracker/attitude',
-               'geometry_msgs/QuaternionStamped').subscribe(
-                   lambda m: put('st', m))
-roslibpy.Topic(client, f'/{args.deputy}/gps/odometry',
-               'nav_msgs/Odometry').subscribe(lambda m: put('gps', m))
-roslibpy.Topic(client, '/chief/eci_state',
-               'nav_msgs/Odometry').subscribe(lambda m: put('tle', m))
-roslibpy.Topic(client, '/chief/sun_vector_lvlh',
-               'geometry_msgs/Vector3Stamped').subscribe(
-                   lambda m: put('sun', m))
-
-print(f'[monitor] {args.deputy} @ {args.host}:9090 (Ctrl+C to quit)')
-try:
-    while True:
-        time.sleep(0.5)
-        with lock:
-            if 'imu' in state:
-                g = state['imu']['angular_velocity']
-                print(f"  gyro=({g['x']:+.2e},{g['y']:+.2e},{g['z']:+.2e})",
-                      end='')
-            if 'gps' in state:
-                p = state['gps']['pose']['pose']['position']
-                print(f"  r_ECI=({p['x']:.0f},{p['y']:.0f},{p['z']:.0f})",
-                      end='')
-            if 'sun' in state:
-                s = state['sun']['vector']
-                print(f"  sun=({s['x']:+.3f},{s['y']:+.3f},{s['z']:+.3f})",
-                      end='')
-            print()
-except KeyboardInterrupt:
-    pass
-client.terminate()
-```
-
-실행:
-```bash
-python3 laptop_monitor.py --deputy deputy_formation
-```
-
-#### 전체 쓸 수 있는 토픽 체크리스트
-
-**Part 1** (`seminar_intro.launch.py` 실행 후):
-
-| 토픽 | 타입 | 접근 |
-|---|---|---|
-| `/lidar/points_raw/points` | PointCloud2 | rosbridge |
-| `/map_cloud` | PointCloud2 | rosbridge |
-| `/nasa_satellite/camera` | Image | web (8080) |
-| `/nasa_satellite3/camera` | Image | web (8080) |
-| `/nasa_satellite3/camera` | Image | web (8080) |
-| `/nasa_satellite3/imu` | Imu | rosbridge |
-| `/model/nasa_satellite3/odometry` | Odometry | rosbridge |
-| `/tf`, `/tf_static` | TFMessage | rosbridge |
-
-**Part 2** (`mission.launch.py` 실행 후) — 각 deputy 기준:
-
-| 토픽 (`deputy_formation` / `deputy_docking`) | 타입 | 접근 | 방향 |
-|---|---|---|---|
-| `/chief/eci_truth` | Odometry | rosbridge | sub |
-| `/chief/eci_state` | Odometry | rosbridge | sub |
-| `/chief/sun_vector_lvlh` | Vector3Stamped | rosbridge | sub |
-| `/deputy_*/imu/data` | Imu | rosbridge | sub |
-| `/deputy_*/star_tracker/attitude` | QuaternionStamped | rosbridge | sub |
-| `/deputy_*/gps/odometry` | Odometry | rosbridge | sub |
-| `/deputy_*/thruster/{fx,fy,fz}_{plus,minus}/cmd` | Float32 | rosbridge | **pub** |
-| `/deputy_*/rw/{x,y,z}/cmd` | Float32 | rosbridge | **pub** |
-| `/nasa_satellite/camera` (팀1) | Image | web (8080) | - |
-| `/nasa_satellite2/camera` (팀2) | Image | web (8080) | - |
-
----
-
 ## 8. 시뮬레이션 실행
 
 ### 8.1 세미나 Part 1 — 통합 인트로 런치
@@ -1065,7 +674,425 @@ bash ~/space_ros_ws/install/gz_cw_dynamics/lib/gz_cw_dynamics/run_full_system_te
 
 ---
 
-## 9. 트러블슈팅
+## 9. 네트워크 설정 (GAIMSat FlatSat — rosbridge 방식)
+
+### 세미나 운영 모델
+
+> **플랫샛 (192.168.0.54)** 에서 Gazebo 가 돌고, **학생 노트북** 들은 자기 자리에서 WebSocket 으로 **그 시뮬레이션을 제어** 합니다.
+>
+> 학생이 노트북에서 `thruster` 토픽을 publish → rosbridge → 플랫샛 Gazebo 의 Deputy 가 실제로 움직임. 센서 데이터 (IMU/GPS/ST/카메라) 는 그 반대 방향으로 노트북에 흘러옵니다.
+
+```
+[플랫샛 192.168.0.54]                         [학생 노트북 × 7]
+
+  Gazebo (mission.sdf)
+  ├─ deputy_formation (팀 1, 4명)
+  └─ deputy_docking   (팀 2, 3명)
+       │ ROS 2 플러그인 (DDS 로컬)
+       ▼
+  rosbridge_server :9090 ◄────── WebSocket ─────── roslibpy (Python)
+  web_video_server :8080 ◄────── HTTP ───────────── 브라우저
+
+노트북 → pub /deputy_*/thruster/*/cmd  → 플랫샛 Gazebo 적용 (위성 움직임)
+노트북 ← sub /deputy_*/imu/data        ← 플랫샛 센서 출력
+노트북 ← HTTP stream 카메라            ← 플랫샛 web_video_server
+```
+
+DDS 디스커버리 대신 **rosbridge** 를 써서 서브넷/방화벽 제약과 무관하게 동작합니다.
+
+### 구조
+
+```
+플랫샛 (.54) WSL2 → rosbridge_server (ws://192.168.0.54:9090)
+                         ↑ TCP / WebSocket (NAT·방화벽 무관)
+노트북들 (.22, .52 등) ──┘  (roslibpy / roslibjs 클라이언트)
+```
+
+### 9.1 플랫샛 (서버) 설정
+
+```bash
+# WSL Ubuntu 터미널
+sudo apt install -y ros-jazzy-rosbridge-suite
+```
+
+서버 실행 (시뮬 launch 전 먼저 띄우거나 별도 터미널):
+```bash
+source /opt/ros/jazzy/setup.bash
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+```
+
+**Windows 관리자 CMD** 에서 방화벽 허용 (1회만):
+```cmd
+netsh advfirewall firewall add rule name="ROS2 rosbridge" dir=in action=allow protocol=TCP localport=9090
+```
+
+### 9.2 모든 노트북 (클라이언트) 설정
+
+```bash
+# WSL Ubuntu 터미널
+sudo apt install -y ros-jazzy-rosbridge-suite python3-roslibpy
+```
+
+**Python 에서 토픽 구독 예시**:
+```python
+import roslibpy
+client = roslibpy.Ros(host='192.168.0.54', port=9090)
+client.run()
+listener = roslibpy.Topic(client, '/deputy_formation/imu/data', 'sensor_msgs/Imu')
+listener.subscribe(lambda msg: print(msg))
+```
+
+**토픽 발행 예시** (추력기 명령):
+```python
+import roslibpy
+client = roslibpy.Ros(host='192.168.0.54', port=9090)
+client.run()
+pub = roslibpy.Topic(client, '/deputy_docking/thruster/fy_plus/cmd',
+                     'std_msgs/Float32')
+pub.publish(roslibpy.Message({'data': 0.5}))
+```
+
+### 9.3 연결 확인
+
+플랫샛 측:
+```bash
+ros2 topic pub /test std_msgs/String "data: hello"
+```
+
+노트북 측 Python:
+```python
+import roslibpy
+c = roslibpy.Ros('192.168.0.54', 9090); c.run()
+t = roslibpy.Topic(c, '/test', 'std_msgs/String')
+t.subscribe(lambda m: print(m))   # "hello" 수신되면 성공
+```
+
+### 9.4 주의사항
+
+- 학생 노트북의 **`ros2 topic echo` 같은 CLI 명령은 rosbridge 를 경유하지 않습니다**. DDS 기반이므로 같은 서브넷에서만 동작. 개인 노트북에서 플랫샛 토픽을 직접 `ros2 topic echo` 로 볼 수 없는 게 일반적. roslibpy 사용 필수.
+- 우리 스타터 스크립트 (`thruster_commander.py`, `sensor_monitor.py` 등) 는 rclpy 기반이라 **같은 머신에서만 동작**. 노트북에서 플랫샛 시뮬레이션 제어하려면 roslibpy 로 포팅하거나, 학생 코드를 플랫샛에서 실행.
+- **gz 토픽 (카메라 `/nasa_satellite/camera` 등)** 은 rosbridge 경유가 아니라 `ros_gz_bridge` 로 ROS 2 토픽화된 후에만 외부 공유됨. 브리지된 토픽 이름으로 roslibpy 구독.
+
+### 9.5 전체 토픽 접근 방법 (Part 1 + Part 2)
+
+**세미나에서는 3가지 방식이 병존합니다**. 기존 로컬 방식도 그대로 유효, rosbridge/web 은 노트북용 추가 경로:
+
+| 방식 | 실행 위치 | 접근 | 장점 |
+|---|---|---|---|
+| **A. 로컬 rclpy** (기존) | **플랫샛** 자체 쉘 | `ros2 run gz_cw_dynamics thruster_commander.py ...` | 빠른 프로토타이핑, CLI 전체 |
+| **B. 원격 roslibpy** (신규) | **학생 노트북** Python | `client = roslibpy.Ros(host='192.168.0.54', ...)` | 자기 자리에서 시뮬 제어 |
+| **C. 브라우저** (신규) | **학생 노트북** 브라우저 | `http://192.168.0.54:8080/...` | 코드 없이 영상/상태 관찰 |
+
+- 이미지/비디오: **C (web_video_server)** 가 가장 빠름 (HTTP stream)
+- 나머지 토픽 (IMU, GPS, ST, Odometry, PointCloud2, 명령): **B (rosbridge)** 가 노트북에서 유일한 경로
+- 플랫샛 앞에 앉아 있다면 **A (로컬 rclpy)** 가 가장 단순
+
+참고 — 로컬 rclpy 방식 정리:
+```bash
+# 플랫샛 자체 쉘에서 (기존)
+ros2 run gz_cw_dynamics thruster_commander.py  --deputy deputy_docking --axis fy_plus --throttle 0.5 --duration 2
+ros2 run gz_cw_dynamics rw_commander.py        --deputy deputy_docking --axis z --torque 0.001 --duration 3
+ros2 run gz_cw_dynamics sensor_monitor.py      --deputy deputy_formation
+ros2 run gz_cw_dynamics camera_saver.py        --deputy deputy_formation --out /tmp/team1
+```
+
+#### 카메라 (web_video_server, 브라우저)
+
+| 토픽 | URL (브라우저에서 접속) |
+|---|---|
+| `/nasa_satellite/camera` (Part 1+2) | `http://192.168.0.54:8080/stream?topic=/nasa_satellite/camera` |
+| `/nasa_satellite2/camera` (Part 1+2) | `http://192.168.0.54:8080/stream?topic=/nasa_satellite2/camera` |
+| `/nasa_satellite3/camera` (Part 1) | `http://192.168.0.54:8080/stream?topic=/nasa_satellite3/camera` |
+| `/stereo/left/image_raw` (Part 1) | `http://192.168.0.54:8080/stream?topic=/stereo/left/image_raw` |
+| `/stereo/right/image_raw` (Part 1) | `http://192.168.0.54:8080/stream?topic=/stereo/right/image_raw` |
+
+전체 가용 토픽 목록: `http://192.168.0.54:8080/`
+
+#### 데이터 토픽 (roslibpy, Python)
+
+공통 서버 연결:
+```python
+import roslibpy
+client = roslibpy.Ros(host='192.168.0.54', port=9090)
+client.run()
+```
+
+**Part 1 — LiDAR 포인트클라우드**
+```python
+pc = roslibpy.Topic(client, '/lidar/points_raw/points',
+                    'sensor_msgs/PointCloud2')
+pc.subscribe(lambda m: print(f'points: width={m["width"]}'))
+```
+
+**Part 1 — 누적 맵**
+```python
+m = roslibpy.Topic(client, '/map_cloud', 'sensor_msgs/PointCloud2')
+m.subscribe(lambda msg: print(f'map width={msg["width"]}'))
+```
+
+**Part 1 — 위성 Odometry (nasa_satellite3)**
+```python
+odo = roslibpy.Topic(client, '/model/nasa_satellite3/odometry',
+                     'nav_msgs/Odometry')
+odo.subscribe(lambda m: print(
+    f"pos=({m['pose']['pose']['position']['x']:.2f}, "
+    f"{m['pose']['pose']['position']['y']:.2f}, "
+    f"{m['pose']['pose']['position']['z']:.2f})"))
+```
+
+**Part 1 — IMU (nasa_satellite3)**
+```python
+imu = roslibpy.Topic(client, '/nasa_satellite3/imu', 'sensor_msgs/Imu')
+imu.subscribe(lambda m: print(
+    f"gyro_z={m['angular_velocity']['z']:+.4e}"))
+```
+
+**Part 2 — Deputy IMU (궤도-aware)**
+```python
+imu = roslibpy.Topic(client, '/deputy_docking/imu/data',
+                     'sensor_msgs/Imu')
+imu.subscribe(lambda m: print(
+    f"gyro z={m['angular_velocity']['z']:+.4e} rad/s"))
+```
+
+**Part 2 — Deputy Star Tracker**
+```python
+st = roslibpy.Topic(client, '/deputy_docking/star_tracker/attitude',
+                    'geometry_msgs/QuaternionStamped')
+st.subscribe(lambda m: print(
+    f"q=({m['quaternion']['x']:+.4f}, {m['quaternion']['y']:+.4f}, "
+    f"{m['quaternion']['z']:+.4f}, {m['quaternion']['w']:+.4f})"))
+```
+
+**Part 2 — Deputy GPS (ECI)**
+```python
+gps = roslibpy.Topic(client, '/deputy_docking/gps/odometry',
+                     'nav_msgs/Odometry')
+gps.subscribe(lambda m: print(
+    f"r_ECI=({m['pose']['pose']['position']['x']:.1f}, "
+    f"{m['pose']['pose']['position']['y']:.1f}, "
+    f"{m['pose']['pose']['position']['z']:.1f}) m"))
+```
+
+**Part 2 — Chief TLE 추정**
+```python
+tle = roslibpy.Topic(client, '/chief/eci_state', 'nav_msgs/Odometry')
+tle.subscribe(lambda m: print(
+    f"chief r_ECI_TLE=({m['pose']['pose']['position']['x']:.1f}, ...)"))
+```
+
+**Part 2 — Sun 벡터 (LVLH)**
+```python
+sun = roslibpy.Topic(client, '/chief/sun_vector_lvlh',
+                     'geometry_msgs/Vector3Stamped')
+sun.subscribe(lambda m: print(
+    f"sun_lvlh=({m['vector']['x']:+.4f}, {m['vector']['y']:+.4f}, "
+    f"{m['vector']['z']:+.4f})"))
+```
+
+#### 제어 발행 (roslibpy)
+
+**추력기 0.5 throttle**:
+```python
+pub = roslibpy.Topic(client, '/deputy_docking/thruster/fy_plus/cmd',
+                     'std_msgs/Float32')
+pub.publish(roslibpy.Message({'data': 0.5}))
+```
+
+**반작용휠 +z 방향 1 mN·m 토크**:
+```python
+pub = roslibpy.Topic(client, '/deputy_docking/rw/z/cmd',
+                     'std_msgs/Float32')
+pub.publish(roslibpy.Message({'data': 0.001}))
+```
+
+(정지: `pub.publish(roslibpy.Message({'data': 0.0}))`)
+
+### 9.6 노트북에서 바로 실행하는 roslibpy 스크립트 예시
+
+아래 세 파일을 학생 노트북에 저장 후 `python3 <파일>.py` 로 실행. **플랫샛 Gazebo 에 직접 영향을 줍니다** (추력기 점화, 휠 토크, 센서 관측).
+
+#### (1) `laptop_thruster.py` — 노트북에서 플랫샛 deputy 추력기 점화
+
+```python
+#!/usr/bin/env python3
+"""노트북 → 플랫샛 Gazebo deputy 추력기 명령 (rosbridge 경유)."""
+import argparse, time, roslibpy
+
+AXES = ('fx_plus','fx_minus','fy_plus','fy_minus','fz_plus','fz_minus')
+
+ap = argparse.ArgumentParser()
+ap.add_argument('--host',     default='192.168.0.54')
+ap.add_argument('--deputy',   default='deputy_docking')
+ap.add_argument('--axis',     choices=AXES, default='fy_plus')
+ap.add_argument('--throttle', type=float,   default=0.5)
+ap.add_argument('--duration', type=float,   default=2.0)
+args = ap.parse_args()
+
+client = roslibpy.Ros(host=args.host, port=9090); client.run()
+topic  = f'/{args.deputy}/thruster/{args.axis}/cmd'
+pub    = roslibpy.Topic(client, topic, 'std_msgs/Float32')
+
+print(f'[fire] {topic} throttle={args.throttle} for {args.duration}s')
+t_end = time.time() + args.duration
+while time.time() < t_end:
+    pub.publish(roslibpy.Message({'data': float(args.throttle)}))
+    time.sleep(0.05)
+pub.publish(roslibpy.Message({'data': 0.0}))
+print('[fire] stopped'); client.terminate()
+```
+
+실행:
+```bash
+python3 laptop_thruster.py --deputy deputy_docking --axis fy_plus --throttle 0.5 --duration 2
+```
+
+#### (2) `laptop_rw.py` — 노트북에서 플랫샛 deputy 반작용휠 토크
+
+```python
+#!/usr/bin/env python3
+"""노트북 → 플랫샛 deputy RW 토크 명령."""
+import argparse, time, roslibpy
+
+ap = argparse.ArgumentParser()
+ap.add_argument('--host',     default='192.168.0.54')
+ap.add_argument('--deputy',   default='deputy_docking')
+ap.add_argument('--axis',     choices=('x','y','z'), default='z')
+ap.add_argument('--torque',   type=float, default=0.001)  # N·m
+ap.add_argument('--duration', type=float, default=3.0)
+args = ap.parse_args()
+
+client = roslibpy.Ros(host=args.host, port=9090); client.run()
+topic  = f'/{args.deputy}/rw/{args.axis}/cmd'
+pub    = roslibpy.Topic(client, topic, 'std_msgs/Float32')
+
+print(f'[rw] {topic} tau={args.torque} Nm for {args.duration}s')
+t_end = time.time() + args.duration
+while time.time() < t_end:
+    pub.publish(roslibpy.Message({'data': float(args.torque)}))
+    time.sleep(0.05)
+pub.publish(roslibpy.Message({'data': 0.0}))
+print('[rw] stopped'); client.terminate()
+```
+
+#### (3) `laptop_monitor.py` — 노트북에서 플랫샛 deputy 센서 통합 모니터
+
+```python
+#!/usr/bin/env python3
+"""노트북 → 플랫샛 deputy 센서 통합 모니터 (IMU, ST, GPS, TLE chief, sun)."""
+import argparse, time, roslibpy
+from threading import Lock
+
+ap = argparse.ArgumentParser()
+ap.add_argument('--host',   default='192.168.0.54')
+ap.add_argument('--deputy', default='deputy_formation')
+args = ap.parse_args()
+
+client = roslibpy.Ros(host=args.host, port=9090); client.run()
+state, lock = {}, Lock()
+def put(k, v):
+    with lock: state[k] = v
+
+roslibpy.Topic(client, f'/{args.deputy}/imu/data',
+               'sensor_msgs/Imu').subscribe(lambda m: put('imu', m))
+roslibpy.Topic(client, f'/{args.deputy}/star_tracker/attitude',
+               'geometry_msgs/QuaternionStamped').subscribe(
+                   lambda m: put('st', m))
+roslibpy.Topic(client, f'/{args.deputy}/gps/odometry',
+               'nav_msgs/Odometry').subscribe(lambda m: put('gps', m))
+roslibpy.Topic(client, '/chief/eci_state',
+               'nav_msgs/Odometry').subscribe(lambda m: put('tle', m))
+roslibpy.Topic(client, '/chief/sun_vector_lvlh',
+               'geometry_msgs/Vector3Stamped').subscribe(
+                   lambda m: put('sun', m))
+
+print(f'[monitor] {args.deputy} @ {args.host}:9090 (Ctrl+C to quit)')
+try:
+    while True:
+        time.sleep(0.5)
+        with lock:
+            if 'imu' in state:
+                g = state['imu']['angular_velocity']
+                print(f"  gyro=({g['x']:+.2e},{g['y']:+.2e},{g['z']:+.2e})",
+                      end='')
+            if 'gps' in state:
+                p = state['gps']['pose']['pose']['position']
+                print(f"  r_ECI=({p['x']:.0f},{p['y']:.0f},{p['z']:.0f})",
+                      end='')
+            if 'sun' in state:
+                s = state['sun']['vector']
+                print(f"  sun=({s['x']:+.3f},{s['y']:+.3f},{s['z']:+.3f})",
+                      end='')
+            print()
+except KeyboardInterrupt:
+    pass
+client.terminate()
+```
+
+실행:
+```bash
+python3 laptop_monitor.py --deputy deputy_formation
+```
+
+#### 전체 쓸 수 있는 토픽 체크리스트
+
+**Part 1** (`seminar_intro.launch.py` 실행 후):
+
+| 토픽 | 타입 | 접근 |
+|---|---|---|
+| `/lidar/points_raw/points` | PointCloud2 | rosbridge |
+| `/map_cloud` | PointCloud2 | rosbridge |
+| `/nasa_satellite/camera` | Image | web (8080) |
+| `/nasa_satellite3/camera` | Image | web (8080) |
+| `/nasa_satellite3/camera` | Image | web (8080) |
+| `/nasa_satellite3/imu` | Imu | rosbridge |
+| `/model/nasa_satellite3/odometry` | Odometry | rosbridge |
+| `/tf`, `/tf_static` | TFMessage | rosbridge |
+
+**Part 2** (`mission.launch.py` 실행 후) — 각 deputy 기준:
+
+| 토픽 (`deputy_formation` / `deputy_docking`) | 타입 | 접근 | 방향 |
+|---|---|---|---|
+| `/chief/eci_truth` | Odometry | rosbridge | sub |
+| `/chief/eci_state` | Odometry | rosbridge | sub |
+| `/chief/sun_vector_lvlh` | Vector3Stamped | rosbridge | sub |
+| `/deputy_*/imu/data` | Imu | rosbridge | sub |
+| `/deputy_*/star_tracker/attitude` | QuaternionStamped | rosbridge | sub |
+| `/deputy_*/gps/odometry` | Odometry | rosbridge | sub |
+| `/deputy_*/thruster/{fx,fy,fz}_{plus,minus}/cmd` | Float32 | rosbridge | **pub** |
+| `/deputy_*/rw/{x,y,z}/cmd` | Float32 | rosbridge | **pub** |
+| `/nasa_satellite/camera` (팀1) | Image | web (8080) | - |
+| `/nasa_satellite2/camera` (팀2) | Image | web (8080) | - |
+
+---
+
+
+### 9.7 WSL2 포트포워딩 (Windows → WSL2)
+
+WSL2 는 NAT 뒤에 있어 외부에서 직접 접속 불가. Windows 관리자 CMD 에서:
+
+```cmd
+:: WSL2 IP 확인 (WSL 내에서: hostname -I)
+:: 예: 172.22.18.143
+
+:: web_video_server (카메라 스트림)
+netsh interface portproxy add v4tov4 listenport=8080 listenaddress=0.0.0.0 connectport=8080 connectaddress=<WSL_IP>
+
+:: rosbridge (토픽 제어)
+netsh interface portproxy add v4tov4 listenport=9090 listenaddress=0.0.0.0 connectport=9090 connectaddress=<WSL_IP>
+
+:: 방화벽 허용
+netsh advfirewall firewall add rule name="WSL2 web 8080" dir=in action=allow protocol=TCP localport=8080
+netsh advfirewall firewall add rule name="WSL2 rosbridge 9090" dir=in action=allow protocol=TCP localport=9090
+```
+
+확인:
+```cmd
+netsh interface portproxy show all
+```
+
+> WSL 재부팅 시 IP 바뀔 수 있음. `hostname -I` 로 확인 후 `connectaddress` 업데이트.
+
 
 | 증상 | 해결 |
 |------|------|
@@ -1094,6 +1121,37 @@ bash ~/space_ros_ws/install/gz_cw_dynamics/lib/gz_cw_dynamics/run_full_system_te
 cd ~/space_ros_ws
 rm -rf build/ install/ log/
 colcon build --symlink-install
+source install/setup.bash
+```
+
+---
+
+## 10. 트러블슈팅
+
+| 증상 | 해결 |
+|------|------|
+| `gz sim --version` 실패 | `sudo apt install -y gz-harmonic` 재설치 |
+| GPU 소프트웨어 렌더링 | `GALLIUM_DRIVER=d3d12` 확인, `sudo usermod -aG render $USER` 후 재부팅 |
+| 모델 로딩 실패 | `echo $GZ_SIM_RESOURCE_PATH`로 경로 확인 |
+| `colcon build` 실패 | `source /opt/ros/jazzy/setup.bash` 확인 후 재빌드 |
+| 토픽이 안 보임 | `ros2 topic list`로 확인, bridge 노드 실행 여부 체크 |
+| Gazebo 검은 화면 | GPU 드라이버 확인, `LIBGL_ALWAYS_SOFTWARE=1`로 임시 우회 |
+| 빌드 후 노드 못 찾음 | `source ~/space_ros_ws/install/setup.bash` 재실행 |
+| Zone.Identifier 오류 | `find . -name "*:Zone.Identifier*" -delete` |
+| 카메라 토픽 안 보임 | `ros2 topic list \| grep camera`로 bridge 확인 |
+| web_video_server 접속 안 됨 | `ros2 node list`에서 실행 확인, 포트 8080 충돌 체크 |
+| web 브라우저 무한로딩 | URL 에 `&type=mjpeg` 추가. WSL2 는 `hostname -I` IP 사용 |
+| gz_cw_dynamics 플러그인 실패 | `GZ_SIM_SYSTEM_PLUGIN_PATH` 에 gz_cw_dynamics/lib 포함 |
+| `python3-sgp4` 없음 | `sudo apt install -y python3-sgp4` 설치 |
+| Gazebo 창 프리즈 | Windows `wsl --shutdown` 후 재접속 |
+| 노트북 roslibpy 연결 실패 | rosbridge_server 실행 + 방화벽 + 포트포워딩 (Section 9.7) |
+| 노트북 카메라 안 됨 | 포트포워딩 8080 + `&type=mjpeg` |
+| `ros2 topic list` 에 원격 없음 | 정상. rosbridge 는 roslibpy 전용 |
+
+### 클린 빌드
+```bash
+cd ~/space_ros_ws && rm -rf build/ install/ log/
+colcon build --symlink-install --packages-select orbit_sim gz_cw_dynamics
 source install/setup.bash
 ```
 
