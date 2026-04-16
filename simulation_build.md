@@ -288,6 +288,9 @@ sudo apt install -y ros-jazzy-image-transport
 ```bash
 sudo apt install -y ros-jazzy-web-video-server
 ```
+```bash
+sudo apt install -y ros-jazzy-rosbridge-suite python3-roslibpy
+```
 
 ### 4.3 확인
 ```bash
