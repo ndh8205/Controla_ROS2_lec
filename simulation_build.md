@@ -541,7 +541,7 @@ ros2 run gz_cw_dynamics camera_saver.py        --deputy deputy_formation --out /
 
 | 토픽 | URL (브라우저에서 접속) |
 |---|---|
-| `/nasa_satellite5/camera` | `http://192.168.0.54:8080/stream?topic=/nasa_satellite5/camera` |
+| `/nasa_satellite3/camera` | `http://192.168.0.54:8080/stream?topic=/nasa_satellite3/camera` |
 | `/nasa_satellite3/camera` | `http://192.168.0.54:8080/stream?topic=/nasa_satellite3/camera` |
 | `/nasa_satellite/camera`  | `http://192.168.0.54:8080/stream?topic=/nasa_satellite/camera` |
 | `/nasa_satellite2/camera` (Part 2) | `http://192.168.0.54:8080/stream?topic=/nasa_satellite2/camera` |
@@ -570,9 +570,9 @@ m = roslibpy.Topic(client, '/map_cloud', 'sensor_msgs/PointCloud2')
 m.subscribe(lambda msg: print(f'map width={msg["width"]}'))
 ```
 
-**Part 1 — 위성 Odometry (nasa_satellite5)**
+**Part 1 — 위성 Odometry (nasa_satellite3)**
 ```python
-odo = roslibpy.Topic(client, '/model/nasa_satellite5/odometry',
+odo = roslibpy.Topic(client, '/model/nasa_satellite3/odometry',
                      'nav_msgs/Odometry')
 odo.subscribe(lambda m: print(
     f"pos=({m['pose']['pose']['position']['x']:.2f}, "
@@ -580,9 +580,9 @@ odo.subscribe(lambda m: print(
     f"{m['pose']['pose']['position']['z']:.2f})"))
 ```
 
-**Part 1 — IMU (nasa_satellite5)**
+**Part 1 — IMU (nasa_satellite3)**
 ```python
-imu = roslibpy.Topic(client, '/nasa_satellite5/imu', 'sensor_msgs/Imu')
+imu = roslibpy.Topic(client, '/nasa_satellite3/imu', 'sensor_msgs/Imu')
 imu.subscribe(lambda m: print(
     f"gyro_z={m['angular_velocity']['z']:+.4e}"))
 ```
@@ -784,9 +784,9 @@ python3 laptop_monitor.py --deputy deputy_formation
 | `/map_cloud` | PointCloud2 | rosbridge |
 | `/nasa_satellite/camera` | Image | web (8080) |
 | `/nasa_satellite3/camera` | Image | web (8080) |
-| `/nasa_satellite5/camera` | Image | web (8080) |
-| `/nasa_satellite5/imu` | Imu | rosbridge |
-| `/model/nasa_satellite5/odometry` | Odometry | rosbridge |
+| `/nasa_satellite3/camera` | Image | web (8080) |
+| `/nasa_satellite3/imu` | Imu | rosbridge |
+| `/model/nasa_satellite3/odometry` | Odometry | rosbridge |
 | `/tf`, `/tf_static` | TFMessage | rosbridge |
 
 **Part 2** (`mission.launch.py` 실행 후) — 각 deputy 기준:
@@ -850,8 +850,8 @@ ros2 node list
 ros2 topic hz /lidar/points_raw/points
 
 # 데이터 내용 확인
-ros2 topic echo /model/nasa_satellite5/odometry
-ros2 topic echo /nasa_satellite5/imu
+ros2 topic echo /model/nasa_satellite3/odometry
+ros2 topic echo /nasa_satellite3/imu
 ```
 
 **`seminar_intro.launch.py` 가 발행하는 전체 토픽 테이블:**
@@ -861,10 +861,10 @@ ros2 topic echo /nasa_satellite5/imu
 | `/lidar/points_raw/points` | `sensor_msgs/PointCloud2` | nasa_satellite3 의 3D LiDAR 포인트클라우드 |
 | `/map_cloud` | `sensor_msgs/PointCloud2` | pointcloud_mapper 가 누적한 월드 프레임 맵 |
 | `/nasa_satellite3/camera` | `sensor_msgs/Image` | nasa_satellite3 카메라 |
-| `/nasa_satellite5/camera` | `sensor_msgs/Image` | nasa_satellite5 카메라 |
+| `/nasa_satellite3/camera` | `sensor_msgs/Image` | nasa_satellite3 카메라 |
 | `/nasa_satellite/camera`  | `sensor_msgs/Image` | nasa_satellite 카메라 |
-| `/nasa_satellite5/imu` | `sensor_msgs/Imu` | IMU |
-| `/model/nasa_satellite5/odometry` | `nav_msgs/Odometry` | 위성 위치/속도 |
+| `/nasa_satellite3/imu` | `sensor_msgs/Imu` | IMU |
+| `/model/nasa_satellite3/odometry` | `nav_msgs/Odometry` | 위성 위치/속도 |
 | `/tf`, `/tf_static` | `tf2_msgs/TFMessage` | TF 트리 (nasa_satellite3 LiDAR 프레임 포함) |
 
 **서비스:**
@@ -892,7 +892,7 @@ ros2 topic echo /nasa_satellite5/imu
 **방법 1: rqt_image_view (GUI)**
 ```bash
 ros2 run rqt_image_view rqt_image_view
-# 드롭다운에서 /nasa_satellite5/camera, /nasa_satellite3/camera, /nasa_satellite/camera 중 선택
+# 드롭다운에서 /nasa_satellite3/camera, /nasa_satellite3/camera, /nasa_satellite/camera 중 선택
 ```
 
 **방법 2: web_video_server (브라우저)**
@@ -900,14 +900,14 @@ ros2 run rqt_image_view rqt_image_view
 자동 실행된 서버에 접속:
 ```
 http://localhost:8080/                                    # 스트림 가능한 토픽 목록
-http://localhost:8080/stream?topic=/nasa_satellite5/camera
+http://localhost:8080/stream?topic=/nasa_satellite3/camera
 http://localhost:8080/stream?topic=/nasa_satellite3/camera
 http://localhost:8080/stream?topic=/nasa_satellite/camera
 ```
 
 **방법 3: Gazebo GUI 내장 카메라 뷰**
 
-Gazebo 우측 패널 > Plugins > Image Display > Topic 에 `nasa_satellite5/camera` 등 입력.
+Gazebo 우측 패널 > Plugins > Image Display > Topic 에 `nasa_satellite3/camera` 등 입력.
 
 ### 8.3b RViz 에서 LiDAR 누적 맵 보기
 
@@ -933,7 +933,7 @@ rqt_graph
 
 ```bash
 # 녹화
-ros2 bag record /model/nasa_satellite5/odometry /nasa_satellite5/imu
+ros2 bag record /model/nasa_satellite3/odometry /nasa_satellite3/imu
 
 # 재생
 ros2 bag play <bag_directory>
