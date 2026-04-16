@@ -151,12 +151,12 @@ source /opt/ros/jazzy/setup.bash
 
 `export` = 환경 변수 설정:
 ```bash
-export ROS_DOMAIN_ID=42
+export MY_VAR=hello
 ```
 
 설정한 변수 확인:
 ```bash
-echo $ROS_DOMAIN_ID
+echo $MY_VAR
 ```
 
 > **주의:** 터미널을 닫으면 source/export 설정이 사라집니다.
@@ -405,8 +405,8 @@ export GZ_SIM_RESOURCE_PATH=$GZ_SIM_RESOURCE_PATH:~/space_ros_ws/install/orbit_s
 # Gazebo 플러그인 경로 (orbit_sim + gz_cw_dynamics)
 export GZ_SIM_SYSTEM_PLUGIN_PATH=~/space_ros_ws/install/gz_cw_dynamics/lib:/opt/ros/jazzy/lib:$GZ_SIM_SYSTEM_PLUGIN_PATH
 
-# ROS 2 DDS 도메인 (동일 서브넷 DDS 경유 시 필요; rosbridge 사용 시 생략 가능)
-export ROS_DOMAIN_ID=7
+# 네트워크: rosbridge 사용하므로 ROS_DOMAIN_ID 설정 불필요.
+# DDS 직접 통신이 필요한 경우에만 동일 ID 를 전원 설정.
 
 # GPU 렌더링 (NVIDIA)
 export LD_LIBRARY_PATH=/usr/lib/wsl/lib:$LD_LIBRARY_PATH
@@ -1114,7 +1114,7 @@ netsh interface portproxy show all
 | rqt_image_view 검은 화면 | 토픽 선택 후 몇 초 대기, Gazebo가 먼저 실행 완료되었는지 확인 |
 | gz_cw_dynamics 플러그인 로딩 실패 | `GZ_SIM_SYSTEM_PLUGIN_PATH` 에 `~/space_ros_ws/install/gz_cw_dynamics/lib` 포함 확인 |
 | `python3-sgp4` 없음 | `sudo apt install -y python3-sgp4` 설치 |
-| 학생 노트북에서 토픽 안 보임 | `ROS_DOMAIN_ID` 모든 기기 동일, 동일 LAN 확인 |
+| 학생 노트북에서 토픽 안 보임 | rosbridge 경유 → roslibpy 사용. DDS CLI 는 같은 머신에서만 동작 |
 | Gazebo 창 프리즈 (반복 실행 후) | Windows PowerShell 에서 `wsl --shutdown` 후 재접속 (WSLg 리셋) |
 | 전체 시스템 정상인지 확인 | `bash ~/space_ros_ws/install/gz_cw_dynamics/lib/gz_cw_dynamics/run_full_system_test.sh` |
 | 노트북에서 `roslibpy` 연결 안 됨 | (1) 플랫샛에서 `ros2 launch rosbridge_server rosbridge_websocket_launch.xml` 실행 여부 (2) Windows 방화벽 9090 TCP 허용 (3) `ping 192.168.0.54` 성공 확인 |
