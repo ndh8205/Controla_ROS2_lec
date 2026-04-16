@@ -19,16 +19,6 @@
         <refresh_rate_hz>60</refresh_rate_hz>
       </plugin>
 
-      <plugin filename="ImageDisplay" name="DVS Event View">
-        <gz-gui>
-          <title>DVS Event Camera</title>
-          <property type="bool" key="showTitleBar">true</property>
-          <property type="string" key="state">docked</property>
-        </gz-gui>
-        <topic>dvs/viz</topic>
-        <refresh_rate_hz>30</refresh_rate_hz>
-      </plugin>
-
     </gui>
 
     <scene>
@@ -88,20 +78,7 @@
     <plugin filename="libgz-sim-scene-broadcaster-system.so" name="gz::sim::systems::SceneBroadcaster"></plugin>
     <plugin filename="libgz-sim-imu-system.so" name="gz::sim::systems::Imu"/>
 
-    <!-- DVS (Event Camera) Emulator — DAVIS346 realistic params -->
-    <plugin filename="libgz-dvs-system.so" name="gz_dvs_plugin::DvsSystem">
-      <camera_sensor_name>nasa_satellite3::nasa_satellite_link::satellite_camera</camera_sensor_name>
-      <ros_topic>/dvs/events</ros_topic>
-      <frame_id>nasa_satellite3/dvs_camera</frame_id>
-      <pos_threshold>0.13</pos_threshold>
-      <neg_threshold>0.20</neg_threshold>
-      <sigma_threshold>0.03</sigma_threshold>
-      <lpf_tau>0.01</lpf_tau>
-      <shot_noise_rate>0.0</shot_noise_rate>
-      <leak_rate>0.0</leak_rate>
-      <refractory_period>0.001</refractory_period>
-      <publish_visualization>true</publish_visualization>
-      <viz_topic>/dvs/image</viz_topic>
-    </plugin>
+    <!-- DVS plugin removed: requires separate gz_dvs_plugin package.
+         See https://github.com/ndh8205/gz_dvs_plugin if needed. -->
   </world>
 </sdf>

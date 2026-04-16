@@ -33,23 +33,13 @@ def generate_launch_description():
     model_path = os.path.join(pkg, 'models')
     csv_dir    = os.path.join(pkg, 'data')
 
-    # gz_dvs_plugin 경로 (설치되어 있으면 로드; 없으면 skip)
-    try:
-        dvs_prefix = get_package_share_directory('gz_dvs_plugin')
-        dvs_lib    = os.path.normpath(
-            os.path.join(dvs_prefix, '..', '..', 'lib'))
-    except Exception:
-        dvs_lib = ''
-
     env = {
         'GZ_SIM_RESOURCE_PATH': ':'.join(filter(None, [
             environ.get('GZ_SIM_RESOURCE_PATH', ''),
             model_path,
         ])),
-        'GZ_SIM_SYSTEM_PLUGIN_PATH': ':'.join(filter(None, [
-            environ.get('GZ_SIM_SYSTEM_PLUGIN_PATH', ''),
-            dvs_lib,
-        ])),
+        'GZ_SIM_SYSTEM_PLUGIN_PATH': environ.get(
+            'GZ_SIM_SYSTEM_PLUGIN_PATH', ''),
     }
 
     # --- Launch arguments -------------------------------------------------
