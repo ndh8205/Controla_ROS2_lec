@@ -449,62 +449,88 @@ Gazebo Harmonic 창이 열리면서 위성 모델이 표시됩니다.
 ### 8.2 토픽 확인 (별도 터미널)
 
 ```bash
-# 토픽 목록
+# 전체 토픽 목록
 ros2 topic list
-
-# 위성 위치/속도 데이터
-ros2 topic echo /model/nasa_satellite5/odometry
-
-# 발행 빈도 확인
-ros2 topic hz /model/nasa_satellite5/odometry
-
-# IMU 데이터
-ros2 topic echo /nasa_satellite5/imu
 
 # 노드 목록
 ros2 node list
+
+# 발행 빈도 확인 (예: LiDAR 포인트클라우드)
+ros2 topic hz /lidar/points_raw/points
+
+# 데이터 내용 확인
+ros2 topic echo /model/nasa_satellite5/odometry
+ros2 topic echo /nasa_satellite5/imu
+```
+
+**`seminar_intro.launch.py` 가 발행하는 전체 토픽 테이블:**
+
+| 토픽 | 타입 | 역할 |
+|---|---|---|
+| `/lidar/points_raw/points` | `sensor_msgs/PointCloud2` | nasa_satellite3 의 3D LiDAR 포인트클라우드 |
+| `/map_cloud` | `sensor_msgs/PointCloud2` | pointcloud_mapper 가 누적한 월드 프레임 맵 |
+| `/nasa_satellite3/camera` | `sensor_msgs/Image` | nasa_satellite3 카메라 |
+| `/nasa_satellite5/camera` | `sensor_msgs/Image` | nasa_satellite5 카메라 |
+| `/nasa_satellite/camera`  | `sensor_msgs/Image` | nasa_satellite 카메라 |
+| `/nasa_satellite5/imu` | `sensor_msgs/Imu` | IMU |
+| `/model/nasa_satellite5/odometry` | `nav_msgs/Odometry` | 위성 위치/속도 |
+| `/tf`, `/tf_static` | `tf2_msgs/TFMessage` | TF 트리 (nasa_satellite3 LiDAR 프레임 포함) |
+
+**서비스:**
+
+| 서비스 | 타입 | 역할 |
+|---|---|---|
+| `/world/space_world/set_pose` | `ros_gz_interfaces/srv/SetEntityPose` | 엔티티 텔레포트 |
+
+**노드 목록** (`ros2 node list` 결과):
+```
+/camera_bridge
+/imu_odo_bridge
+/lidar_bridge
+/multi_satellite_controller_service
+/pointcloud_mapper
+/set_pose_bridge
+/web_video_server
+/rviz2                           # rviz:=true 일 때만
 ```
 
 ### 8.3 카메라 영상 확인
 
-launch 파일이 카메라 브리지와 web_video_server를 자동 실행합니다.
+`seminar_intro.launch.py` 가 카메라 브리지와 `web_video_server` 를 자동 실행합니다.
 
 **방법 1: rqt_image_view (GUI)**
 ```bash
 ros2 run rqt_image_view rqt_image_view
-# 드롭다운에서 /nasa_satellite5/camera 선택
+# 드롭다운에서 /nasa_satellite5/camera, /nasa_satellite3/camera, /nasa_satellite/camera 중 선택
 ```
 
 **방법 2: web_video_server (브라우저)**
 
-launch 실행 시 web_video_server가 자동으로 포트 8080에서 시작됩니다.
-브라우저에서 접속:
+자동 실행된 서버에 접속:
 ```
+http://localhost:8080/                                    # 스트림 가능한 토픽 목록
 http://localhost:8080/stream?topic=/nasa_satellite5/camera
-```
-
-스트림 가능 토픽 목록 확인:
-```
-http://localhost:8080/
+http://localhost:8080/stream?topic=/nasa_satellite3/camera
+http://localhost:8080/stream?topic=/nasa_satellite/camera
 ```
 
 **방법 3: Gazebo GUI 내장 카메라 뷰**
 
-Gazebo 창 상단 메뉴에서 카메라 센서 영상을 직접 확인할 수 있습니다:
-1. Gazebo 우측 패널 > Plugins > Image Display
-2. Topic에 `nasa_satellite5/camera` 입력
+Gazebo 우측 패널 > Plugins > Image Display > Topic 에 `nasa_satellite5/camera` 등 입력.
 
-**카메라 브리지 토픽 목록:**
-| 토픽 | 설명 |
-|------|------|
-| `/nasa_satellite5/camera` | Deputy 위성 카메라 |
-| `/nasa_satellite5/imu` | Deputy IMU |
-| `/mev/vss_nfov/left/image_raw` | NFOV 스테레오 좌 |
-| `/mev/vss_nfov/right/image_raw` | NFOV 스테레오 우 |
-| `/mev/vss_wfov/left/image_raw` | WFOV 스테레오 좌 |
-| `/mev/vss_wfov/right/image_raw` | WFOV 스테레오 우 |
-| `/mev/vss_docking/left/image_raw` | 도킹 카메라 좌 |
-| `/mev/vss_docking/right/image_raw` | 도킹 카메라 우 |
+### 8.3b RViz 에서 LiDAR 누적 맵 보기
+
+```bash
+ros2 launch orbit_sim seminar_intro.launch.py rviz:=true
+```
+
+또는 다른 터미널에서 수동 기동:
+```bash
+ros2 run rviz2 rviz2 -d \
+    ~/space_ros_ws/install/orbit_sim/share/orbit_sim/config/lidar_mapping.rviz
+```
+
+확인 토픽: `/map_cloud` (월드 프레임), `/lidar/points_raw/points` (센서 프레임).
 
 ### 8.4 노드 연결 시각화
 
@@ -576,13 +602,41 @@ ros2 run gz_cw_dynamics camera_saver.py --deputy deputy_docking --out /tmp/frame
 - `/chief/eci_state` — **SGP4+noise TLE 추정** (학생 네비게이션용)
 - `/chief/sun_vector_lvlh` — 태양 방향 벡터 (LVLH)
 
-**Deputy 별** (`deputy_formation` / `deputy_docking`)
-- `/deputy_*/imu/data` — LVLH-aware IMU
-- `/deputy_*/star_tracker/attitude` — body-in-ECI 쿼터니언
-- `/deputy_*/gps/odometry` — ECI 위치/속도 + 노이즈
-- `/deputy_*/thruster/{fx,fy,fz}_{plus,minus}/cmd` — 6 추력기 명령 (Float32 [0,1])
-- `/deputy_*/rw/{x,y,z}/cmd` — 3 반작용휠 토크 명령 (Float32 N·m)
-- `/nasa_satellite(2)/camera` — 탑재 카메라 (gz transport)
+**Deputy 공통 패턴** (각 deputy 마다 `/deputy_formation/...` 또는 `/deputy_docking/...` 로 네임스페이스됨)
+
+| 토픽 | 타입 | 방향 | 설명 |
+|---|---|---|---|
+| `/deputy_*/imu/data` | `sensor_msgs/Imu` | 발행 | LVLH-aware IMU (자이로에 $\omega_{LVLH/I}=n$ 포함, accel 은 비중력 specific force) |
+| `/deputy_*/star_tracker/attitude` | `geometry_msgs/QuaternionStamped` | 발행 | body-in-ECI 쿼터니언 + Gaussian 노이즈 (σ=0.05°) |
+| `/deputy_*/gps/odometry` | `nav_msgs/Odometry` | 발행 | ECI 위치/속도 + 노이즈 (σ_pos=5 m, σ_vel=0.05 m/s) |
+| `/deputy_*/cw_pseudo_accel` | `gz.msgs.Vector3d` | 발행 (gz transport) | CW pseudo-acceleration, IMU 보정용 내부 토픽 |
+| `/deputy_*/thruster/fx_plus/cmd` | `std_msgs/Float32` | **구독** | +x 방향 추력 throttle [0,1] |
+| `/deputy_*/thruster/fx_minus/cmd` | `std_msgs/Float32` | **구독** | -x 방향 추력 |
+| `/deputy_*/thruster/fy_plus/cmd` | `std_msgs/Float32` | **구독** | +y 방향 추력 |
+| `/deputy_*/thruster/fy_minus/cmd` | `std_msgs/Float32` | **구독** | -y 방향 추력 |
+| `/deputy_*/thruster/fz_plus/cmd` | `std_msgs/Float32` | **구독** | +z 방향 추력 |
+| `/deputy_*/thruster/fz_minus/cmd` | `std_msgs/Float32` | **구독** | -z 방향 추력 |
+| `/deputy_*/rw/x/cmd` | `std_msgs/Float32` | **구독** | x축 반작용휠 토크 [N·m] |
+| `/deputy_*/rw/y/cmd` | `std_msgs/Float32` | **구독** | y축 반작용휠 토크 |
+| `/deputy_*/rw/z/cmd` | `std_msgs/Float32` | **구독** | z축 반작용휠 토크 |
+
+**카메라** (gz transport, `ros-gz-image` 로 ROS 2 에 브리지 가능):
+
+| Deputy | gz topic |
+|---|---|
+| `deputy_formation` | `/nasa_satellite/camera` |
+| `deputy_docking`   | `/nasa_satellite2/camera` |
+
+**`ros2 node list` 결과 (Part 2)**:
+```
+/chief_propagator
+/thruster_<topic>_cmd × 12       # 각 deputy × 6 axis × 2 = 12 ROS 노드
+/rw_<topic>_cmd × 6              # 각 deputy × 3 axis × 2 = 6 ROS 노드
+/orbit_imu_<topic>_data × 2
+/star_tracker_<topic>_attitude × 2
+/gps_<topic>_odometry × 2
+```
+(각 플러그인이 자기 rclcpp::Node 를 띄우므로 다수)
 
 ### 8b.4 RTF 조정 (원거리 접근 시)
 
