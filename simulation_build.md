@@ -590,20 +590,30 @@ ros2 launch gz_cw_dynamics mission.launch.py
 
 ### 8b.2 학생 스타터 명령 (개인 노트북)
 
+> **주의**: 학생 노트북에는 ROS 2 빌드 불필요. `python3 student/...` 로 직접 실행.
+> `ros2 run` 은 플랫샛 로컬에서만 사용.
+
 ```bash
+# 학생 노트북 설치 (1회)
+sudo apt install -y python3-pip
+pip3 install roslibpy --break-system-packages
+git clone https://github.com/ndh8205/Controla_ROS2_lec.git ~/orbit_sim
+cd ~/orbit_sim
+
+# 센서 모니터링 (자이로+가속도+GPS+ST+TLE+Sun)
+python3 student/completed/laptop_monitor.py --host 192.168.0.54 --deputy deputy_formation
+
 # 추력기 (병진)
-ros2 run gz_cw_dynamics thruster_commander.py \
+python3 student/completed/laptop_thruster.py --host 192.168.0.54 \
     --deputy deputy_docking --axis fy_plus --throttle 0.5 --duration 2
 
 # 반작용휠 (자세)
-ros2 run gz_cw_dynamics rw_commander.py \
+python3 student/completed/laptop_rw.py --host 192.168.0.54 \
     --deputy deputy_docking --axis z --torque 0.001 --duration 3
 
-# 센서 모니터링
-ros2 run gz_cw_dynamics sensor_monitor.py --deputy deputy_formation
-
-# 카메라 저장
-ros2 run gz_cw_dynamics camera_saver.py --deputy deputy_docking --out /tmp/frames
+# 카메라 → 브라우저에서 직접:
+#   http://192.168.0.54:8080/stream_viewer?topic=/nasa_satellite/camera&type=mjpeg
+#   http://192.168.0.54:8080/stream_viewer?topic=/observer/chief/camera&type=mjpeg
 ```
 
 ### 8b.3 주요 토픽
@@ -792,13 +802,20 @@ t.subscribe(lambda m: print(m))   # "hello" 수신되면 성공
 - 나머지 토픽 (IMU, GPS, ST, Odometry, PointCloud2, 명령): **B (rosbridge)** 가 노트북에서 유일한 경로
 - 플랫샛 앞에 앉아 있다면 **A (로컬 rclpy)** 가 가장 단순
 
-참고 — 로컬 rclpy 방식 정리:
+참고 — 로컬 rclpy 방식 (**플랫샛 자체 쉘에서만 동작**, 학생 노트북 불가):
 ```bash
-# 플랫샛 자체 쉘에서 (기존)
+# 플랫샛 자체 쉘에서 (gz_cw_dynamics 빌드 필요)
 ros2 run gz_cw_dynamics thruster_commander.py  --deputy deputy_docking --axis fy_plus --throttle 0.5 --duration 2
 ros2 run gz_cw_dynamics rw_commander.py        --deputy deputy_docking --axis z --torque 0.001 --duration 3
 ros2 run gz_cw_dynamics sensor_monitor.py      --deputy deputy_formation
 ros2 run gz_cw_dynamics camera_saver.py        --deputy deputy_formation --out /tmp/team1
+```
+
+학생 노트북에서는 **반드시 python3 + roslibpy 방식** 사용:
+```bash
+cd ~/orbit_sim
+python3 student/completed/laptop_monitor.py --host 192.168.0.54 --deputy deputy_formation
+python3 student/completed/laptop_thruster.py --host 192.168.0.54 --deputy deputy_docking --axis fy_plus --throttle 0.5 --duration 2
 ```
 
 #### 카메라 (web_video_server, 브라우저)

@@ -70,17 +70,19 @@ ros2 launch gz_cw_dynamics mission.launch.py
 ros2 launch gz_cw_dynamics mission.launch.py headless:=true
 ```
 
-### 학생 노트북 — 설치 (1회)
+### 학생 노트북 — 설치 (1회, ROS 2 불필요!)
 ```bash
-sudo apt install -y ros-jazzy-rosbridge-suite python3-pip
+sudo apt install -y python3-pip
 pip3 install roslibpy --break-system-packages
-cd ~/space_ros_ws/src
-git clone https://github.com/ndh8205/Controla_ROS2_lec.git orbit_sim
-git clone https://github.com/ndh8205/gz_cw_dynamics.git
+git clone https://github.com/ndh8205/Controla_ROS2_lec.git ~/orbit_sim
 ```
+> roslibpy 만 있으면 됨. ROS 2, Gazebo, colcon build 전부 불필요.
+> `ros2 run` 명령은 학생 노트북에서 **사용 불가** — `python3 파일경로` 로 실행.
 
 ### 학생 노트북 — 완성 예제 (바로 실행)
 ```bash
+cd ~/orbit_sim
+
 # 센서 통합 모니터 (자이로+가속도계+GPS+ST+TLE+Sun+상대거리)
 python3 student/completed/laptop_monitor.py --host 192.168.0.54 --deputy deputy_formation
 python3 student/completed/laptop_monitor.py --host 192.168.0.54 --deputy deputy_docking
@@ -94,6 +96,8 @@ python3 student/completed/laptop_rw.py --host 192.168.0.54 --deputy deputy_docki
 
 ### 학생 노트북 — 역할별 scaffold (TODO 구현)
 ```bash
+cd ~/orbit_sim
+
 # 자세 제어 (ST + 자이로 + 가속도계 → RW)
 python3 student/attitude_controller.py --host 192.168.0.54 --deputy deputy_formation
 
@@ -103,6 +107,9 @@ python3 student/orbit_controller.py --host 192.168.0.54 --deputy deputy_docking
 # 영상 (카메라 브라우저 + 거리 모니터)
 python3 student/vision_operator.py --host 192.168.0.54 --deputy deputy_formation
 ```
+
+> **중요**: 학생 노트북에서 `ros2 run ...` 이나 `ros2 launch ...` 는 동작하지 않습니다.
+> 반드시 `python3 student/...` 으로 직접 실행하세요.
 
 ## 코드 구조
 

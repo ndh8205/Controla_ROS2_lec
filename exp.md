@@ -13,18 +13,23 @@ bash ~/kill_sim.sh                        # 이전 프로세스 정리
 ros2 launch gz_cw_dynamics mission.launch.py   # 시뮬레이션 + rosbridge + web 시작
 ```
 
-### 학생 노트북 (1회)
+### 학생 노트북 (1회, ROS 2 불필요!)
 ```bash
-sudo apt install -y ros-jazzy-rosbridge-suite python3-pip
+sudo apt install -y python3-pip
 pip3 install roslibpy --break-system-packages
+git clone https://github.com/ndh8205/Controla_ROS2_lec.git ~/orbit_sim
+cd ~/orbit_sim
 ```
+> `ros2 run`, `ros2 launch` 는 학생 노트북에서 **사용 불가**.
+> 반드시 `python3 student/...` 로 직접 실행.
 
 ---
 
 ## 1. 센서 모니터 (laptop_monitor.py)
 
-### 실행
+### 실행 (학생 노트북에서)
 ```bash
+cd ~/orbit_sim
 python3 student/completed/laptop_monitor.py --host 192.168.0.54 --deputy deputy_formation
 ```
 
