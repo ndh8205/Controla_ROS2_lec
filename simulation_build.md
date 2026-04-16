@@ -290,7 +290,7 @@ sudo apt install -y ros-jazzy-web-video-server
 ```
 ```bash
 sudo apt install -y ros-jazzy-rosbridge-suite
-pip3 install roslibpy
+pip3 install roslibpy --break-system-packages
 ```
 
 ### 4.3 확인
@@ -735,7 +735,7 @@ netsh advfirewall firewall add rule name="ROS2 rosbridge" dir=in action=allow pr
 ```bash
 # WSL Ubuntu 터미널
 sudo apt install -y ros-jazzy-rosbridge-suite
-pip3 install roslibpy
+pip3 install roslibpy --break-system-packages
 ```
 
 **Python 에서 토픽 구독 예시**:
@@ -1118,7 +1118,7 @@ netsh interface portproxy show all
 | Gazebo 창 프리즈 (반복 실행 후) | Windows PowerShell 에서 `wsl --shutdown` 후 재접속 (WSLg 리셋) |
 | 전체 시스템 정상인지 확인 | `bash ~/space_ros_ws/install/gz_cw_dynamics/lib/gz_cw_dynamics/run_full_system_test.sh` |
 | 노트북에서 `roslibpy` 연결 안 됨 | (1) 플랫샛에서 `ros2 launch rosbridge_server rosbridge_websocket_launch.xml` 실행 여부 (2) Windows 방화벽 9090 TCP 허용 (3) `ping 192.168.0.54` 성공 확인 |
-| `pip install roslibpy` 가 필요한 경우 | `python3-roslibpy` apt 로 설치 실패 시 `pip3 install roslibpy --user` |
+| `pip install roslibpy` 가 필요한 경우 | `python3-roslibpy` apt 로 설치 실패 시 `pip3 install roslibpy --break-system-packages --user` |
 | 노트북 `ros2 topic list` 에 원격 토픽 없음 | 정상. rosbridge 경유는 CLI 아닌 roslibpy Python 스크립트로만 보임. 같은 서브넷 DDS 동작 시에만 CLI 접근 가능 |
 
 ### 클린 빌드 (빌드 오류 시)
