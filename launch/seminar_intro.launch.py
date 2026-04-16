@@ -120,6 +120,14 @@ def generate_launch_description():
         output='screen',
     )
 
+    # --- 6b. rosbridge (ws://localhost:9090) — 노트북 roslibpy 용 --------
+    rosbridge = Node(
+        package='rosbridge_server',
+        executable='rosbridge_websocket',
+        name='rosbridge_websocket',
+        output='screen',
+    )
+
     # --- 7. Multi-satellite CSV trajectory controller ---------------------
     # (Gazebo 시작 후 5s 지연)
     controller = Node(
@@ -177,6 +185,7 @@ def generate_launch_description():
         imu_bridge,
         set_pose_bridge,
         web,
+        rosbridge,
         delayed_controller,
         delayed_mapper,
         rviz,
