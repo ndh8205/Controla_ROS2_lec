@@ -400,7 +400,7 @@ export GZ_SIM_RESOURCE_PATH=$GZ_SIM_RESOURCE_PATH:~/space_ros_ws/install/orbit_s
 # Gazebo 플러그인 경로 (orbit_sim + gz_cw_dynamics)
 export GZ_SIM_SYSTEM_PLUGIN_PATH=~/space_ros_ws/install/gz_cw_dynamics/lib:/opt/ros/jazzy/lib:$GZ_SIM_SYSTEM_PLUGIN_PATH
 
-# ROS 2 DDS 도메인 (강사가 공지하는 값 사용, 전원 동일해야 토픽 공유됨)
+# ROS 2 DDS 도메인 (동일 서브넷 DDS 경유 시 필요; rosbridge 사용 시 생략 가능)
 export ROS_DOMAIN_ID=7
 
 # GPU 렌더링 (NVIDIA)
@@ -412,6 +412,85 @@ export GALLIUM_DRIVER=d3d12
 ```bash
 source ~/.bashrc
 ```
+
+---
+
+## 7b. 네트워크 설정 (GAIMSat FlatSat — rosbridge 방식)
+
+세미나에서 **메인 데스크탑 (플랫샛, 192.168.0.54)** 은 Gazebo 시뮬레이션 + ROS 2 코어를 돌리고, **학생 개인 노트북** 들은 WebSocket/TCP 로 토픽을 공유합니다. DDS 디스커버리 대신 **rosbridge** 를 써서 서브넷/방화벽 제약과 무관하게 동작합니다.
+
+### 구조
+
+```
+플랫샛 (.54) WSL2 → rosbridge_server (ws://192.168.0.54:9090)
+                         ↑ TCP / WebSocket (NAT·방화벽 무관)
+노트북들 (.22, .52 등) ──┘  (roslibpy / roslibjs 클라이언트)
+```
+
+### 7b.1 플랫샛 (서버) 설정
+
+```bash
+# WSL Ubuntu 터미널
+sudo apt install -y ros-jazzy-rosbridge-suite
+```
+
+서버 실행 (시뮬 launch 전 먼저 띄우거나 별도 터미널):
+```bash
+source /opt/ros/jazzy/setup.bash
+ros2 launch rosbridge_server rosbridge_websocket_launch.xml
+```
+
+**Windows 관리자 CMD** 에서 방화벽 허용 (1회만):
+```cmd
+netsh advfirewall firewall add rule name="ROS2 rosbridge" dir=in action=allow protocol=TCP localport=9090
+```
+
+### 7b.2 모든 노트북 (클라이언트) 설정
+
+```bash
+# WSL Ubuntu 터미널
+sudo apt install -y ros-jazzy-rosbridge-suite python3-roslibpy
+```
+
+**Python 에서 토픽 구독 예시**:
+```python
+import roslibpy
+client = roslibpy.Ros(host='192.168.0.54', port=9090)
+client.run()
+listener = roslibpy.Topic(client, '/deputy_formation/imu/data', 'sensor_msgs/Imu')
+listener.subscribe(lambda msg: print(msg))
+```
+
+**토픽 발행 예시** (추력기 명령):
+```python
+import roslibpy
+client = roslibpy.Ros(host='192.168.0.54', port=9090)
+client.run()
+pub = roslibpy.Topic(client, '/deputy_docking/thruster/fy_plus/cmd',
+                     'std_msgs/Float32')
+pub.publish(roslibpy.Message({'data': 0.5}))
+```
+
+### 7b.3 연결 확인
+
+플랫샛 측:
+```bash
+ros2 topic pub /test std_msgs/String "data: hello"
+```
+
+노트북 측 Python:
+```python
+import roslibpy
+c = roslibpy.Ros('192.168.0.54', 9090); c.run()
+t = roslibpy.Topic(c, '/test', 'std_msgs/String')
+t.subscribe(lambda m: print(m))   # "hello" 수신되면 성공
+```
+
+### 7b.4 주의사항
+
+- 학생 노트북의 **`ros2 topic echo` 같은 CLI 명령은 rosbridge 를 경유하지 않습니다**. DDS 기반이므로 같은 서브넷에서만 동작. 개인 노트북에서 플랫샛 토픽을 직접 `ros2 topic echo` 로 볼 수 없는 게 일반적. roslibpy 사용 필수.
+- 우리 스타터 스크립트 (`thruster_commander.py`, `sensor_monitor.py` 등) 는 rclpy 기반이라 **같은 머신에서만 동작**. 노트북에서 플랫샛 시뮬레이션 제어하려면 roslibpy 로 포팅하거나, 학생 코드를 플랫샛에서 실행.
+- **gz 토픽 (카메라 `/nasa_satellite/camera` 등)** 은 rosbridge 경유가 아니라 `ros_gz_bridge` 로 ROS 2 토픽화된 후에만 외부 공유됨. 브리지된 토픽 이름으로 roslibpy 구독.
 
 ---
 
@@ -687,6 +766,9 @@ bash ~/space_ros_ws/install/gz_cw_dynamics/lib/gz_cw_dynamics/run_full_system_te
 | 학생 노트북에서 토픽 안 보임 | `ROS_DOMAIN_ID` 모든 기기 동일, 동일 LAN 확인 |
 | Gazebo 창 프리즈 (반복 실행 후) | Windows PowerShell 에서 `wsl --shutdown` 후 재접속 (WSLg 리셋) |
 | 전체 시스템 정상인지 확인 | `bash ~/space_ros_ws/install/gz_cw_dynamics/lib/gz_cw_dynamics/run_full_system_test.sh` |
+| 노트북에서 `roslibpy` 연결 안 됨 | (1) 플랫샛에서 `ros2 launch rosbridge_server rosbridge_websocket_launch.xml` 실행 여부 (2) Windows 방화벽 9090 TCP 허용 (3) `ping 192.168.0.54` 성공 확인 |
+| `pip install roslibpy` 가 필요한 경우 | `python3-roslibpy` apt 로 설치 실패 시 `pip3 install roslibpy --user` |
+| 노트북 `ros2 topic list` 에 원격 토픽 없음 | 정상. rosbridge 경유는 CLI 아닌 roslibpy Python 스크립트로만 보임. 같은 서브넷 DDS 동작 시에만 CLI 접근 가능 |
 
 ### 클린 빌드 (빌드 오류 시)
 ```bash
