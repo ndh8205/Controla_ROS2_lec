@@ -136,6 +136,12 @@ class DisturbGUI:
                   bg='#ff3333', fg='white', font=('TkDefaultFont', 11, 'bold'),
                   command=self._stop_all).pack(fill='x', padx=8, pady=8)
 
+        # Active indicator (live elapsed while holding)
+        self.active_line = tk.StringVar(value='active: (none)')
+        tk.Label(self.root, textvariable=self.active_line, anchor='w',
+                 bg='#222', fg='#9f9', font=('TkFixedFont', 10)
+                 ).pack(fill='x', padx=6)
+
         # Log
         f = ttk.LabelFrame(self.root, text='Log')
         f.pack(fill='both', expand=True, **pad)
@@ -195,26 +201,30 @@ class DisturbGUI:
     # --------- Thruster ---------
     def _thrust_start(self, ax):
         topic = f'/{self.target.get()}/thruster/{ax}/cmd'
-        self.active[topic] = {'value': float(self.throttle.get())}
+        self.active[topic] = {'value': float(self.throttle.get()),
+                              'start': time.time()}
         self._log(f'FIRE   {topic}  throttle={self.throttle.get():.2f}')
 
     def _thrust_stop(self, ax):
         topic = f'/{self.target.get()}/thruster/{ax}/cmd'
-        self.active.pop(topic, None)
+        info = self.active.pop(topic, None)
         self._send_zero(topic)
-        self._log(f'stop   {topic}')
+        held = time.time() - info['start'] if info else 0.0
+        self._log(f'stop   {topic}  held {held:.2f}s')
 
     # --------- RW ---------
     def _rw_start(self, ax):
         topic = f'/{self.target.get()}/rw/{ax}/cmd'
-        self.active[topic] = {'value': float(self.torque.get())}
+        self.active[topic] = {'value': float(self.torque.get()),
+                              'start': time.time()}
         self._log(f'TORQ   {topic}  tau={self.torque.get():+.3f} N*m')
 
     def _rw_stop(self, ax):
         topic = f'/{self.target.get()}/rw/{ax}/cmd'
-        self.active.pop(topic, None)
+        info = self.active.pop(topic, None)
         self._send_zero(topic)
-        self._log(f'stop   {topic}')
+        held = time.time() - info['start'] if info else 0.0
+        self._log(f'stop   {topic}  held {held:.2f}s')
 
     def _send_zero(self, topic):
         if not self.client or not self.client.is_connected:
@@ -225,6 +235,11 @@ class DisturbGUI:
             time.sleep(0.02)
 
     def _stop_all(self):
+        # 기존 active 들 각각의 held 시간 기록하고 정리
+        now = time.time()
+        for topic, info in list(self.active.items()):
+            held = now - info.get('start', now)
+            self._log(f'stop   {topic}  held {held:.2f}s (STOP ALL)')
         self.active.clear()
         self.cam_enabled = False
         self.tle_enabled = False
@@ -341,6 +356,7 @@ class DisturbGUI:
     # --------- Tick loop (50 ms) ---------
     def _schedule_tick(self):
         if not self.client or not self.client.is_connected:
+            self._update_active_line()
             self.root.after(200, self._schedule_tick)
             return
 
@@ -363,7 +379,27 @@ class DisturbGUI:
                 self._cam_publish_black()
                 self.cam_last = now
 
+        self._update_active_line()
         self.root.after(50, self._schedule_tick)
+
+    def _update_active_line(self):
+        """상단 active 라인 실시간 갱신 — 현재 누르고 있는 토픽 + elapsed."""
+        if not self.active:
+            self.active_line.set('active: (none)')
+            return
+        now = time.time()
+        parts = []
+        for topic, info in self.active.items():
+            # 짧은 표시명 추출: .../thruster/fy_plus/cmd -> fy_plus, .../rw/z/cmd -> rw/z
+            short = topic.rstrip('/cmd')
+            if '/thruster/' in short:
+                short = short.split('/thruster/')[-1]
+            elif '/rw/' in short:
+                short = 'rw/' + short.split('/rw/')[-1]
+            held = now - info.get('start', now)
+            v = info.get('value', 0.0)
+            parts.append(f'{short}={v:+.3f}/{held:.1f}s')
+        self.active_line.set('active: ' + '  '.join(parts))
 
     # --------- Close ---------
     def _on_close(self):
