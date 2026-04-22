@@ -1,111 +1,148 @@
-# 교수용 실습 제어 도구
+# 교수용 실습 조종·방해 도구
 
-학생 팀이 작성한 ADCS/ODCS/Vision/Navigation 이 **실제 상황에서 얼마나 강인한지** 테스트하기 위한 외란 주입 도구.
+학생 팀이 작성한 ADCS/ODCS/Vision/Navigation 을 **교수님 노트북에서 실시간으로 괴롭히기**.
 
-## 설치
+두 가지 도구:
+- **`disturb_gui.py`** — tkinter GUI, **실시간 직접 조종** (thruster / RW / TLE noise / camera)
+- **`disturb.py`** — CLI, **타이머 기반 자동 외란** (랜덤 토크 30초 같은 시나리오)
 
-서버(플랫샛)에서 이미 `roslibpy` 사용 가능한 환경이면 별도 설치 없음. 다른 곳에서 쓰려면:
+둘 다 **교수님 노트북에서 실행 가능** — rosbridge(ws://220.67.219.55:9090) 경유로 서버에 접속. 서버 쪽 설정·재시작 불필요.
+
+---
+
+## 설치 (교수님 노트북, 1회)
+
 ```bash
 pip3 install roslibpy --break-system-packages
+
+# Linux/WSL 의 경우 tkinter:
+sudo apt install -y python3-tk
+
+# Windows 파이썬: tkinter 기본 포함. 추가 설치 불필요.
+
+git clone https://github.com/ndh8205/Controla_ROS2_lec.git ~/orbit_sim
+cd ~/orbit_sim/professor
 ```
 
-## 사용 흐름 (예시 45분 세미나)
+---
 
-### 0. 리허설 (학생들 작업 중, 교수 터미널)
+## 1. `disturb_gui.py` — 실시간 직접 조종 (메인)
+
 ```bash
-cd ~/Controla_ROS2_lec
-# 수치 튜닝 단계엔 방해 없이 대기
+python3 disturb_gui.py --host 220.67.219.55        # 플랫샛 원격
+python3 disturb_gui.py --host localhost            # 서버 자체에서
 ```
 
-### 1. SOFT 단계 (15–25분차, 팀이 기본 제어 수렴했을 때)
+실행 시 아래 창이 뜬다:
 
-**랜덤 토크 외란 (자세제어 테스트)**
+```
+┌─ Target deputy ──────────────────────────────┐
+│  (•) deputy_formation   ( ) deputy_docking   │
+└──────────────────────────────────────────────┘
+┌─ Thrusters  (hold to fire) ──────────────────┐
+│  throttle: [==========]  0.50                │
+│  [fx+][fx-][fy+][fy-][fz+][fz-]              │
+└──────────────────────────────────────────────┘
+┌─ Reaction Wheels  (hold to apply) ───────────┐
+│  torque N·m: [=======]  +0.050               │
+│  [rw/x]  [rw/y]  [rw/z]                      │
+└──────────────────────────────────────────────┘
+┌─ Chief TLE 노이즈 폭격 ──────────────────────┐
+│  pos σ (m):   [====]  500                    │
+│  vel σ (m/s): [===]   0.5                    │
+│  [ TLE noise: OFF ]                          │
+└──────────────────────────────────────────────┘
+┌─ Camera 블랙 프레임 주입 ────────────────────┐
+│  topic: [/nasa_satellite/camera        v]    │
+│  rate (Hz): [===]  3                         │
+│  [ Camera inject: OFF ]                      │
+└──────────────────────────────────────────────┘
+┌─ Emergency ──────────────────────────────────┐
+│    [ STOP ALL ACTUATORS ]                    │
+└──────────────────────────────────────────────┘
+┌─ Log ────────────────────────────────────────┐
+│  14:32:10 FIRE /deputy_formation/thr/fy+ @0.5│
+│  ...                                          │
+└──────────────────────────────────────────────┘
+```
+
+### 조작
+
+| 위젯 | 동작 |
+|---|---|
+| **Thruster 버튼** | **마우스 누르고 있는 동안** 분사, 떼면 정지. slider 로 throttle 조절. |
+| **RW 버튼** | 마우스 누르면 해당 축 토크 인가, 떼면 0 토크. slider 로 +/- 방향·크기. |
+| **TLE noise 토글** | GUI 가 `/chief/eci_state` 구독한 실측값에 σ 만큼 가우시안 덧붙여 같은 토픽에 고속 재발행. 학생 GPS/Navigation 이 변동 큰 chief 값을 보게 됨. |
+| **Camera inject 토글** | 선택 카메라 토픽에 **640×480 블랙 RGB 프레임** 주입. 진짜 카메라 프레임과 interleave → 학생 영상 스트림이 깜빡이거나 검은 프레임 섞임. |
+| **STOP ALL** | 두 deputy × 6 추력기 × 3 RW 전부 0. noise/camera 도 OFF. |
+
+### 활용 예시 (세미나 중)
+
+| 시점 | 조작 | 학습 효과 |
+|---|---|---|
+| 팀이 PD 자세제어 튜닝 중 | RW 버튼 몇 초 누름 | 외란 들어와도 PD 가 잡는지 확인 |
+| Vision 이 카메라 정렬 성공 | Camera inject ON | Vision 이 블랙프레임 처리/알림 할 수 있는지 |
+| Navigation 이 TLE 기반 예측 안정 | TLE σ 2000 m 으로 올린 뒤 ON | TLE 불신 감지 로직 / 필터 강화 필요성 학습 |
+| ODCS 가 브레이크 burn 근처 | 반대방향 추력기 몇 초 | overshoot 대응 |
+| 도킹 팀 최종 근접 | 작은 RW torque + 작은 추력 동시 | 자세-궤도 커플링 대응 |
+
+### 주의
+
+- GUI 가 publish 하는 모든 명령은 학생 publisher 와 **race 관계**. 학생 쪽 명령과 번갈아 덮어쓰기됨. 학생이 과제로 "교수 외란과 공존" 하는 제어를 구현해야 함.
+- TLE noise mode 는 **서버 쪽 chief_propagator 원본은 그대로** 둠. GUI 의 가짜 메시지가 구독자 쪽에서 interleave.
+- Camera inject 는 JPEG 가 아닌 **raw rgb8 640×480**. 네트워크 부하 1–3 MB/s (해상도·Hz 비례). 학생 브라우저가 1–2 Hz 로 블랙 프레임 받게 됨.
+- Ctrl+C 나 창 닫기 → 자동 `STOP ALL` 호출 후 종료.
+
+---
+
+## 2. `disturb.py` — 자동 시나리오 (보조)
+
+고정 시간 동안 자동 외란. GUI 로 일일이 누르기 싫을 때 or 리허설 체크리스트용.
+
 ```bash
-python3 professor/disturb.py --mode random-torque --target deputy_formation \
-    --duration 90 --amplitude 0.05
+python3 disturb.py --help
 ```
-- 3–5 초마다 랜덤 축에 ±0.05 N·m 토크 주입
-- ADCS 팀이 PD 제어로 흡수해야 함
-- amplitude 를 올려가며 ADCS 의 수렴 한계 테스트
 
-**랜덤 추력 외란 (궤도제어 테스트)**
+### 모드
+
+| mode | 효과 |
+|---|---|
+| `random-torque` | 3–5 초마다 랜덤 축에 ±amp N·m 토크 |
+| `random-thrust` | 5–10 초 간격, 0.5–1.5 초 짧은 랜덤 추력 burst |
+| `actuator-jam` | 지정 토픽에 0 을 고속 발행해 학생 명령 무력화 |
+
+### 예시
+
 ```bash
-python3 professor/disturb.py --mode random-thrust --target deputy_docking \
-    --duration 60
-```
-- 5–10 초 간격, 0.5–1.5 초 burst
-- ODCS 팀이 감지 후 보상 burn 필요
+# 자세제어 연습: 1분간 랜덤 토크
+python3 disturb.py --host 220.67.219.55 \
+    --mode random-torque --target deputy_formation --duration 60 --amplitude 0.05
 
-### 2. HARD 단계 (30분차 이후, 팀이 자만할 때쯤)
+# 궤도제어 연습: 30초간 랜덤 추력
+python3 disturb.py --host 220.67.219.55 \
+    --mode random-thrust --target deputy_docking --duration 30
 
-**Chief 텔레포트 (시각적 교란만)**
-```bash
-python3 professor/disturb.py --mode teleport-chief --offset 300 200 50
-```
-- Chief 의 **Gazebo 모델 pose** 만 순간이동
-- ⚠ **`chief_propagator` 는 SGP4 로 독립 전파**하므로 `/chief/eci_state`,
-  `/chief/eci_truth` 는 영향 없음. → Navigation 의 TLE 기반 계산은 정상,
-  GPS 로 본 상대벡터도 변화 없음.
-- 실제 영향: **Observer 카메라 (`/observer/chief/camera` 등) 의 시야만**
-  변함. Vision 팀이 "chief 가 화면에서 사라졌다!" 로 감지.
-- 이 모드는 서버 쪽 쉘에서 `gz service` 직접 호출 필요 — 스크립트가 명령 출력.
-- 진짜 TLE 교란은 chief_propagator 의 `tle_pos_sigma`/`tle_vel_sigma` 파라미터를
-  runtime 에 상향 조정하는 별도 기능이 필요 (미구현, 향후 추가).
-
-**액추에이터 간섭 (통신 교란 시나리오)**
-```bash
-# rw/z 토픽을 0 으로 계속 덮어씀 → ADCS 의 yaw 제어 무력화
-python3 professor/disturb.py --mode actuator-jam --target deputy_formation \
-    --topic rw/z --duration 30 --rate 50
-```
-- 학생의 명령이 50 Hz 로 덮어써지는 0 때문에 무시됨
-- 팀이 토픽 충돌 개념을 이해하는지 관찰
-- 다른 축은 살아있으니 대체 제어 가능
-
-## 팁
-
-### 페어 외란 (두 팀 동시 테스트)
-두 터미널에서 각 팀에 다른 외란:
-```bash
-# Terminal A
-python3 professor/disturb.py --mode random-torque --target deputy_formation &
-
-# Terminal B
-python3 professor/disturb.py --mode random-thrust --target deputy_docking &
+# yaw 축만 30초 간섭 (다른 축 살아있음)
+python3 disturb.py --host 220.67.219.55 \
+    --mode actuator-jam --target deputy_formation --topic rw/z --duration 30 --rate 50
 ```
 
-### 점진적 강도 증가
-```bash
-for AMP in 0.02 0.04 0.06 0.08 0.10; do
-    echo "====== amplitude $AMP ======"
-    python3 professor/disturb.py --mode random-torque \
-        --target deputy_formation --duration 30 --amplitude $AMP
-    sleep 10   # 팀 복구 대기
-done
+모든 모드 Ctrl+C 로 안전 종료 (자동 stop_all).
+
+---
+
+## 디자인 원칙
+
+- **학생 위성에만 영향** — chief 모델, chief_propagator 내부, 시뮬레이션 물리 엔진은 건드리지 않음. 교육적으로 "학생이 작성한 딥ute 제어 코드가 얼마나 강인한가" 를 테스트.
+- **서버 설정 불필요** — 모든 외란은 rosbridge 경유 publish. 서버 재시작 / 코드 수정 없음. 학생과 동일 경로로 접근해 "교수도 학생과 같은 권한" 시뮬.
+- **동시 여러 외란 가능** — GUI 는 actuator hold + TLE noise + camera inject 동시 활성화. 스트레스 테스트.
+- **언제든 STOP ALL** — 한 버튼으로 전부 0, 학생이 정상 상태에서 디버그 계속 가능.
+
+## 디렉토리 내용
+
 ```
-
-### 긴급 정지 (Ctrl+C)
-`Ctrl+C` 누르면 자동으로 `rw/*` 과 `thruster/*` 모든 토픽에 0 발행해서 외란 즉시 중지.
-
-## 모드 레퍼런스
-
-| mode | 대상 | 주요 인자 | 효과 |
-|---|---|---|---|
-| `random-torque` | 1 deputy | `--amplitude` | RW 축에 랜덤 토크, 자세 교란 |
-| `random-thrust` | 1 deputy | — | 랜덤 방향 추력, 궤도 교란 |
-| `teleport-chief` | chief (만 물리 이동) | `--offset Δx Δy Δz` | Chief 위치 순간이동 (gz service 필요) |
-| `actuator-jam` | 1 deputy 1 topic | `--topic`, `--rate` | 지정 토픽 덮어쓰기 |
-
-## 디자인 노트
-
-- **rosbridge 경유** — 학생과 동일한 경로라서 "교수는 추가 권한 없음" 시연 가능.
-- **teleport-chief 만 gz service** — 이건 rosbridge 가 노출 안 하는 gz transport 영역. 서버 쉘 접근 필요.
-- 학생 노트북 공유 네트워크에서도 교수 컴퓨터 또는 서버에서 실행 가능.
-
-## 추가 아이디어 (미구현)
-
-- `--mode sensor-noise`: chief_propagator 파라미터를 runtime 에 바꿔서 TLE 노이즈 증폭 (rclpy param set 필요, 별도 작업)
-- `--mode power-brownout`: 모든 `rw/*`, `thruster/*` 을 30 초간 0 으로 덮어쓰기 (종합 전력 장애 시뮬)
-- `--mode comm-dropout`: `rosbridge_server` 자체를 10 초 죽였다 살리기 (학생 reconnect 로직 테스트)
-
-필요하면 추가 구현.
+professor/
+├── disturb_gui.py   # tkinter GUI (메인)
+├── disturb.py       # CLI 자동 외란 (보조)
+└── README.md        # 이 파일
+```

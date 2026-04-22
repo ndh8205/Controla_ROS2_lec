@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""교수님 실습 방해 도구 — 학생 팀에 외란 주입 (rosbridge 경유).
+"""교수님 자동화 방해 도구 (CLI) — 학생 팀에 정해진 시간 동안 외란 주입.
+
+실시간 직접 조종은 `disturb_gui.py` (tkinter) 를 사용. 이 CLI 는 "랜덤 토크
+30 초" 같은 타임드 시나리오를 스크립트화할 때 쓴다.
 
 사용 시나리오:
     1. 팀이 PD 자세제어 완성 → `--mode random-torque` 로 흔들기 (soft)
     2. 팀이 V-bar 접근 안정 → `--mode random-thrust` 로 밀치기 (soft)
-    3. 팀이 자세·궤도 모두 안정 → `--mode teleport-chief` 로 지도 뒤섞기 (hard)
-    4. 디버그 테스트 → `--mode actuator-jam` 로 학생 명령 덮어쓰기 (hard)
+    3. 디버그 테스트 → `--mode actuator-jam` 로 학생 명령 덮어쓰기 (hard)
 
 주의:
-    - 서버(플랫샛)와 같은 네트워크에서 실행. `--host localhost` 가능.
+    - Chief 모델 자체는 건드리지 않음 (교육 목적상 학생 위성에만 외란).
     - 실행 중 Ctrl+C 로 정상 종료 (모든 외란 중지).
-    - 학생 팀이 무엇에 막혔는지 로그 남기면 수업 후 피드백에 유용.
 
 사용법:
     python3 disturb.py --help
     python3 disturb.py --mode random-torque --target deputy_formation --duration 60 --amplitude 0.05
     python3 disturb.py --mode random-thrust --target deputy_docking --duration 30
-    python3 disturb.py --mode teleport-chief --offset 300 200 50
     python3 disturb.py --mode actuator-jam  --target deputy_formation --topic rw/z --rate 50
 """
 import argparse
@@ -119,30 +119,6 @@ def mode_random_thrust(client, args):
     print('[prof] random-thrust done')
 
 
-def mode_teleport_chief(client, args):
-    """Chief 를 지정 오프셋만큼 순간이동 (gz service set_pose).
-
-    주의: 이건 gz service 라서 rosbridge 경유로는 직접 호출 불가 (gz transport
-    영역). 서버 쪽 쉘에서 직접 호출해야 함. 아래는 명령 출력만.
-    """
-    ox, oy, oz = args.offset
-    # 현재 chief 는 (0,0,0) 에 고정. offset 만큼 옮김.
-    print(f'[prof] teleport-chief offset=({ox}, {oy}, {oz}) m')
-    print('       rosbridge 로는 gz service 직접 호출 불가.')
-    print('       서버 쪽 쉘에서 아래 명령 실행:')
-    print()
-    print(f'  gz service -s /world/mission/set_pose \\')
-    print(f'    --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 1000 \\')
-    print(f'    --req \'name: "chief", '
-          f'position: {{x: {ox}, y: {oy}, z: {oz}}}\'')
-    print()
-    print('  caveat: chief 의 Gazebo pose 만 이동. chief_propagator 는 SGP4 로')
-    print('  독립 전파하므로 /chief/eci_state 와 /chief/eci_truth 는 영향 없음.')
-    print('  → Navigation 이 "TLE 점프" 로 감지 불가 (visual/obs 카메라만 변함).')
-    print('  TLE 에 진짜 이상을 주려면 chief_propagator 의 노이즈 파라미터를')
-    print('  runtime 에 상향 (별도 기능, 미구현).')
-
-
 def mode_actuator_jam(client, args):
     """지정 토픽에 0 값을 고속 발행해서 학생 명령을 덮어쓰기."""
     print(f'[prof] actuator-jam → /{args.target}/{args.topic}/cmd '
@@ -163,15 +139,13 @@ def main():
     ap.add_argument('--host',   default='localhost')
     ap.add_argument('--mode',   required=True,
                     choices=('random-torque', 'random-thrust',
-                             'teleport-chief', 'actuator-jam'))
+                             'actuator-jam'))
     ap.add_argument('--target', default='deputy_formation',
                     choices=('deputy_formation', 'deputy_docking'))
     ap.add_argument('--duration', type=float, default=60.0,
-                    help='seconds (random-torque, random-thrust, jam)')
+                    help='seconds')
     ap.add_argument('--amplitude', type=float, default=0.05,
                     help='random-torque: max |τ| N·m (≤ 0.1 plugin clamp)')
-    ap.add_argument('--offset', type=float, nargs=3, default=[300, 0, 0],
-                    help='teleport-chief: Δx Δy Δz (m)')
     ap.add_argument('--topic', default='rw/z',
                     help='actuator-jam: e.g. rw/z, thruster/fy_plus')
     ap.add_argument('--rate',  type=float, default=50.0,
@@ -193,10 +167,9 @@ def main():
     signal.signal(signal.SIGINT, _sigint)
 
     try:
-        if   args.mode == 'random-torque':  mode_random_torque(client, args)
-        elif args.mode == 'random-thrust':  mode_random_thrust(client, args)
-        elif args.mode == 'teleport-chief': mode_teleport_chief(client, args)
-        elif args.mode == 'actuator-jam':   mode_actuator_jam(client, args)
+        if   args.mode == 'random-torque': mode_random_torque(client, args)
+        elif args.mode == 'random-thrust': mode_random_thrust(client, args)
+        elif args.mode == 'actuator-jam':  mode_actuator_jam(client, args)
     finally:
         client.terminate()
 
