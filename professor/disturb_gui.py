@@ -15,46 +15,21 @@
 사용법:
     python3 disturb_gui.py --host 220.67.219.55
     python3 disturb_gui.py --host localhost        # 서버 자체에서
+
+UI 는 영문 라벨로 통일 (플랫폼별 한글 폰트 이슈 회피). 여기 docstring,
+코드 주석은 한국어 유지.
 """
 import argparse
 import base64
-import sys
 import time
-import tkinter as tk
-import tkinter.font as tkfont
-from tkinter import ttk, scrolledtext
 import threading
+import tkinter as tk
+from tkinter import ttk, scrolledtext
 
 try:
     import roslibpy
-except ImportError as e:
-    raise SystemExit('roslibpy 필요: pip3 install roslibpy --break-system-packages')
-
-
-# 한글·특수문자 렌더링 가능한 폰트. OS 별 우선순위.
-_KOREAN_FONT_CANDIDATES = [
-    'Malgun Gothic',        # Windows 기본 한글 글꼴
-    'Noto Sans CJK KR',     # Linux (fonts-noto-cjk)
-    'NanumGothic',          # Linux (fonts-nanum)
-    'Apple SD Gothic Neo',  # macOS
-    'AppleGothic',          # macOS fallback
-    'Gulim', 'Dotum',       # Windows legacy
-]
-_FIXED_FONT_CANDIDATES = [
-    'Consolas',             # Windows
-    'Noto Sans Mono CJK KR',
-    'D2Coding', 'NanumGothicCoding',
-    'DejaVu Sans Mono',     # Linux
-    'Menlo',                # macOS
-]
-
-
-def _pick_font(candidates, fallback):
-    families = set(tkfont.families())
-    for name in candidates:
-        if name in families:
-            return name
-    return fallback
+except ImportError:
+    raise SystemExit('roslibpy required: pip3 install roslibpy --break-system-packages')
 
 
 AXES_TH  = ('fx_plus', 'fx_minus', 'fy_plus', 'fy_minus', 'fz_plus', 'fz_minus')
@@ -68,8 +43,7 @@ CAM_TOPICS = [
     '/observer/docking/camera',
 ]
 
-# 블랙 프레임 해상도 (카메라 원본과 동일)
-CAM_W, CAM_H = 640, 480
+CAM_W, CAM_H = 640, 480   # black frame 해상도
 
 
 class DisturbGUI:
@@ -77,22 +51,19 @@ class DisturbGUI:
         self.host = host
         self.client = None
         self.pubs = {}              # topic -> roslibpy.Topic
-        self.active = {}            # topic -> {'value': float}  (hold-to-fire)
+        self.active = {}            # topic -> {'value': float}
         self.cam_enabled = False
         self.cam_last = 0.0
         self.tle_enabled = False
-        self.tle_last_state = None  # 마지막으로 수신한 진짜 /chief/eci_state
+        self.tle_last_state = None
         self.tle_last_pub = 0.0
 
-        # 순서 중요 — 폰트는 위젯 생성 전에 적용해야 ttk 위젯에도 반영됨
         self.root = tk.Tk()
-        self.root.title(f'Professor Disturb Console — {self.host}:9090')
-        self.root.geometry('620x820')
-        self._apply_fonts()
+        self.root.title(f'Professor Disturb Console - {self.host}:9090')
+        self.root.geometry('620x780')
         self._build_widgets()
         self._connect_async()
-        # tick 루프는 반드시 메인 스레드에서 시작 (tkinter after 는 thread-unsafe).
-        # 연결 전에도 tick 이 돌아야 연결 완료 즉시 publish 가능.
+        # tick 은 메인 스레드에서 시작 (tkinter after 는 thread-unsafe)
         self.root.after(100, self._schedule_tick)
 
     # --------- UI ---------
@@ -114,7 +85,7 @@ class DisturbGUI:
             ttk.Radiobutton(f, text=d, variable=self.target,
                             value=d).pack(side='left', padx=12, pady=4)
 
-        # thruster
+        # thrusters
         f = ttk.LabelFrame(self.root, text='Thrusters  (hold to fire)')
         f.pack(fill='x', **pad)
         self._slider_row(f, 'throttle', self.throttle, 0.0, 1.0, 0, '.2f')
@@ -128,7 +99,7 @@ class DisturbGUI:
         # RW
         f = ttk.LabelFrame(self.root, text='Reaction Wheels  (hold to apply)')
         f.pack(fill='x', **pad)
-        self._slider_row(f, 'torque N·m', self.torque, -0.1, 0.1, 0, '+.3f')
+        self._slider_row(f, 'torque [N*m]', self.torque, -0.1, 0.1, 0, '+.3f')
         bfr = ttk.Frame(f); bfr.grid(row=1, column=0, columnspan=3, sticky='w', pady=4)
         for i, ax in enumerate(AXES_RW):
             b = tk.Button(bfr, text=f'rw/{ax}', bg='#ddddff', width=10, relief='raised')
@@ -137,21 +108,23 @@ class DisturbGUI:
             b.bind('<ButtonRelease-1>', lambda e, a=ax: self._rw_stop(a))
 
         # TLE noise
-        f = ttk.LabelFrame(self.root, text='Chief TLE 노이즈 폭격 (σ 값만큼 가우시안 추가)')
+        f = ttk.LabelFrame(self.root,
+                           text='Chief TLE noise bombard (Gaussian added on top)')
         f.pack(fill='x', **pad)
-        self._slider_row(f, 'pos σ (m)',    self.pos_sigma, 0, 5000, 0, '.0f')
-        self._slider_row(f, 'vel σ (m/s)',  self.vel_sigma, 0, 10,   1, '.2f')
+        self._slider_row(f, 'pos sigma [m]',   self.pos_sigma, 0, 5000, 0, '.0f')
+        self._slider_row(f, 'vel sigma [m/s]', self.vel_sigma, 0, 10,   1, '.2f')
         self.tle_btn = tk.Button(f, text='TLE noise: OFF', bg='#cccccc',
                                  width=18, command=self._tle_toggle)
         self.tle_btn.grid(row=2, column=1, pady=4, sticky='w')
 
         # Camera
-        f = ttk.LabelFrame(self.root, text='Camera 블랙 프레임 주입')
+        f = ttk.LabelFrame(self.root, text='Camera black-frame inject')
         f.pack(fill='x', **pad)
         ttk.Label(f, text='topic:').grid(row=0, column=0, sticky='w', padx=4)
         ttk.Combobox(f, textvariable=self.cam_topic, values=CAM_TOPICS,
-                     width=35, state='readonly').grid(row=0, column=1, columnspan=2, sticky='w')
-        self._slider_row(f, 'rate (Hz)', self.cam_hz, 1, 15, 1, '.0f')
+                     width=35, state='readonly').grid(row=0, column=1,
+                                                      columnspan=2, sticky='w')
+        self._slider_row(f, 'rate [Hz]', self.cam_hz, 1, 15, 1, '.0f')
         self.cam_btn = tk.Button(f, text='Camera inject: OFF', bg='#cccccc',
                                  width=20, command=self._cam_toggle)
         self.cam_btn.grid(row=2, column=1, pady=4, sticky='w')
@@ -176,54 +149,6 @@ class DisturbGUI:
 
         self.root.protocol('WM_DELETE_WINDOW', self._on_close)
 
-    def _apply_fonts(self):
-        """한글·특수문자 렌더링 가능한 글꼴 자동 선택 + 3 경로 모두 적용.
-
-        tkinter 폰트 시스템은 3 경로가 따로 있음:
-          1) 이름있는 폰트 (TkDefaultFont 등) — 일반 tk 위젯의 기본
-          2) option_add('*Font', ...) — tk 위젯의 저수준 기본
-          3) ttk.Style().configure('.', font=...) — ttk 위젯
-        한글이 박스로 보이는 건 ttk 위젯이 CJK 없는 폰트를 쓸 때 발생.
-        세 경로 모두 바꿔야 LabelFrame 제목·라벨 등이 전부 한글 지원 폰트로.
-        """
-        fam = _pick_font(_KOREAN_FONT_CANDIDATES, None)
-        fixed = _pick_font(_FIXED_FONT_CANDIDATES, None)
-        size = 10
-
-        if fam:
-            # (1) 이름있는 폰트들
-            for name in ('TkDefaultFont', 'TkTextFont', 'TkMenuFont',
-                         'TkHeadingFont', 'TkCaptionFont',
-                         'TkSmallCaptionFont', 'TkIconFont', 'TkTooltipFont'):
-                try:
-                    tkfont.nametofont(name).configure(family=fam, size=size)
-                except Exception:
-                    pass
-            # (2) tk 위젯 option DB
-            self.root.option_add('*Font', (fam, size))
-            # (3) ttk 위젯 스타일 — '.' 는 모든 ttk 기본
-            style = ttk.Style()
-            style.configure('.',               font=(fam, size))
-            style.configure('TLabel',          font=(fam, size))
-            style.configure('TButton',         font=(fam, size))
-            style.configure('TRadiobutton',    font=(fam, size))
-            style.configure('TCheckbutton',    font=(fam, size))
-            style.configure('TLabelframe.Label', font=(fam, size, 'bold'))
-            style.configure('TCombobox',       font=(fam, size))
-
-        if fixed:
-            try:
-                tkfont.nametofont('TkFixedFont').configure(family=fixed,
-                                                           size=max(9, size-1))
-            except Exception:
-                pass
-
-        # 디버그용 폰트 목록 일부 로그
-        available = sorted(tkfont.families())
-        has_korean = [f for f in available if f in _KOREAN_FONT_CANDIDATES]
-        print(f'[disturb_gui] picked default={fam} fixed={fixed}')
-        print(f'[disturb_gui] Korean fonts available: {has_korean}')
-
     def _slider_row(self, parent, label, var, lo, hi, row, fmt):
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky='w', padx=4)
         ttk.Scale(parent, variable=var, from_=lo, to=hi, orient='horizontal',
@@ -244,7 +169,6 @@ class DisturbGUI:
                 self.client.run()
                 self.status.set(f'connected: {self.host}:9090')
                 self._log(f'connected to {self.host}:9090')
-                # Subscribe chief/eci_state for TLE noise mode
                 sub = roslibpy.Topic(self.client, '/chief/eci_state',
                                      'nav_msgs/Odometry')
                 sub.subscribe(self._on_chief_state)
@@ -263,7 +187,6 @@ class DisturbGUI:
         self.logbox.configure(state='normal')
         self.logbox.insert('end', f'{t}  {msg}\n')
         self.logbox.see('end')
-        # 최근 300줄만 유지
         total = int(self.logbox.index('end-1c').split('.')[0])
         if total > 300:
             self.logbox.delete('1.0', f'{total-300}.0')
@@ -285,7 +208,7 @@ class DisturbGUI:
     def _rw_start(self, ax):
         topic = f'/{self.target.get()}/rw/{ax}/cmd'
         self.active[topic] = {'value': float(self.torque.get())}
-        self._log(f'TORQ   {topic}  τ={self.torque.get():+.3f} N·m')
+        self._log(f'TORQ   {topic}  tau={self.torque.get():+.3f} N*m')
 
     def _rw_stop(self, ax):
         topic = f'/{self.target.get()}/rw/{ax}/cmd'
@@ -313,7 +236,7 @@ class DisturbGUI:
                     self._send_zero(f'/{dep}/thruster/{ax}/cmd')
                 for ax in AXES_RW:
                     self._send_zero(f'/{dep}/rw/{ax}/cmd')
-        self._log('STOP ALL — both deputies, all axes zeroed, noise/cam OFF')
+        self._log('STOP ALL - both deputies, all axes zeroed, noise/cam OFF')
 
     # --------- TLE noise ---------
     def _on_chief_state(self, msg):
@@ -323,8 +246,8 @@ class DisturbGUI:
         if not self.tle_enabled:
             self.tle_enabled = True
             self.tle_btn.configure(text='TLE noise: ON', bg='#ff9999')
-            self._log(f'TLE noise ON  pos_σ={self.pos_sigma.get():.0f}m '
-                      f'vel_σ={self.vel_sigma.get():.2f}m/s')
+            self._log(f'TLE noise ON  pos_sigma={self.pos_sigma.get():.0f}m '
+                      f'vel_sigma={self.vel_sigma.get():.2f}m/s')
         else:
             self.tle_enabled = False
             self.tle_btn.configure(text='TLE noise: OFF', bg='#cccccc')
@@ -351,7 +274,7 @@ class DisturbGUI:
                         'z': p['z'] + random.gauss(0, ps),
                     },
                     'orientation': m['pose']['pose'].get(
-                        'orientation', {'x':0,'y':0,'z':0,'w':1}),
+                        'orientation', {'x': 0, 'y': 0, 'z': 0, 'w': 1}),
                 },
                 'covariance': m['pose'].get('covariance', [0.0]*36),
             },
@@ -363,7 +286,7 @@ class DisturbGUI:
                         'z': v['z'] + random.gauss(0, vs),
                     },
                     'angular': m['twist']['twist'].get(
-                        'angular', {'x':0,'y':0,'z':0}),
+                        'angular', {'x': 0, 'y': 0, 'z': 0}),
                 },
                 'covariance': m['twist'].get('covariance', [0.0]*36),
             },
@@ -379,7 +302,8 @@ class DisturbGUI:
         if not self.cam_enabled:
             self.cam_enabled = True
             self.cam_btn.configure(text='Camera inject: ON', bg='#ff9999')
-            self._log(f'CAM inject ON  {self.cam_topic.get()} @ {self.cam_hz.get():.0f} Hz')
+            self._log(f'CAM inject ON  {self.cam_topic.get()} @ '
+                      f'{self.cam_hz.get():.0f} Hz')
         else:
             self.cam_enabled = False
             self.cam_btn.configure(text='Camera inject: OFF', bg='#cccccc')
@@ -387,7 +311,7 @@ class DisturbGUI:
 
     _black_cache = None
     def _black_frame_payload(self):
-        """Lazy-build 640x480 rgb8 black frame, base64 encoded."""
+        """640x480 rgb8 올제로 프레임을 1회 만들어 base64 캐시."""
         if DisturbGUI._black_cache is None:
             data = bytes(CAM_W * CAM_H * 3)
             DisturbGUI._black_cache = base64.b64encode(data).decode('ascii')
@@ -429,12 +353,10 @@ class DisturbGUI:
                 self._log(f'pub err {topic}: {e}')
 
         now = time.time()
-        # TLE noise
         if self.tle_enabled and (now - self.tle_last_pub) >= 0.05:
             self._tle_publish_noisy()
             self.tle_last_pub = now
 
-        # Camera black frame
         if self.cam_enabled:
             interval = 1.0 / max(1, float(self.cam_hz.get()))
             if (now - self.cam_last) >= interval:
@@ -462,7 +384,7 @@ class DisturbGUI:
 def main():
     ap = argparse.ArgumentParser(description='Professor disturbance GUI')
     ap.add_argument('--host', default='220.67.219.55',
-                    help='rosbridge WebSocket host (default: 플랫샛 IP)')
+                    help='rosbridge WebSocket host')
     args = ap.parse_args()
     DisturbGUI(args.host).run()
 
