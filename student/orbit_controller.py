@@ -12,13 +12,16 @@
 
 [액추에이터 출력]
   /deputy_*/thruster/{fx,fy,fz}_{plus,minus}/cmd  → Float32 [0,1] throttle
+                                                     100 kg 위성, max_force=10 N
+                                                     throttle=1.0 → a = 0.1 m/s²
 
 [주의]
-  - TLE 오차 ~1-3 km! 근접 시 카메라 VBN 필요 (영상 담당 연계)
-  - V-bar 접근 (along-track) 이 CW 에서 가장 안정적
+  - TLE 오차 ~100 m + J2 drift. 근접 시 카메라 VBN 필요 (영상 담당 연계)
+  - V-bar 접근 (along-track, ±y) 이 CW 에서 가장 안정적
+  - radial (±x) 분사는 CW 커플링으로 along-track 드리프트 유발
 
 사용법:
-    python3 orbit_controller.py --host 192.168.0.54 --deputy deputy_docking
+    python3 orbit_controller.py --host 220.67.219.55 --deputy deputy_docking
 """
 import argparse
 import math
@@ -28,8 +31,9 @@ import roslibpy
 
 # ===================== 설정 =====================
 ap = argparse.ArgumentParser()
-ap.add_argument('--host',   default='192.168.0.54')
-ap.add_argument('--deputy', default='deputy_docking')
+ap.add_argument('--host',   default='220.67.219.55')
+ap.add_argument('--deputy', default='deputy_docking',
+                choices=('deputy_formation', 'deputy_docking'))
 args = ap.parse_args()
 
 client = roslibpy.Ros(host=args.host, port=9090)
@@ -113,13 +117,13 @@ def vec_norm(v):
 # 2. 접근 방향 (단위 벡터)
 #    dir = (dr[0]/dist, dr[1]/dist, dr[2]/dist)
 #
-# 3. 거리 기반 속도 제어
+# 3. 거리 기반 속도 제어 (100 kg 위성 기준, max_force=10 N → a_max=0.1 m/s²)
 #    if dist > 1000:       # 원거리: 빠르게 접근
-#        target_v = 1.0    # m/s
+#        target_v = 2.0    # m/s   (10 N × 20 s → Δv = 2 m/s)
 #    elif dist > 100:      # 중거리: 천천히
-#        target_v = 0.3
+#        target_v = 0.5
 #    else:                 # 근접: 매우 천천히
-#        target_v = 0.05
+#        target_v = 0.05   # (도킹 직전 상대속도 상한)
 #
 # 4. 추력기 선택 (body frame 에서 chief 방향 → 어느 추력기?)
 #    - 단순화: along-track (+y or -y) 접근 가정

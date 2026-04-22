@@ -12,10 +12,13 @@
                                      가속도 ≈ 0 (추력 없을 때, specific force)
 
 [액추에이터 출력]
-  /deputy_*/rw/{x,y,z}/cmd        → 각 축 토크 명령 (Float32, N·m, max 0.01)
+  /deputy_*/rw/{x,y,z}/cmd        → 각 축 토크 명령 (Float32, N·m)
+                                     plugin clamp ±0.1 N·m (max_torque)
+                                     100 kg 위성 (Ixx=Iyy=14, Izz=10 kg·m²) 기준
+                                     max 토크 → α_yaw = 0.01 rad/s²
 
 사용법:
-    python3 attitude_controller.py --host 192.168.0.54 --deputy deputy_formation
+    python3 attitude_controller.py --host 220.67.219.55 --deputy deputy_formation
 """
 import argparse
 import math
@@ -25,8 +28,9 @@ import roslibpy
 
 # ===================== 설정 =====================
 ap = argparse.ArgumentParser()
-ap.add_argument('--host',   default='192.168.0.54')
-ap.add_argument('--deputy', default='deputy_formation')
+ap.add_argument('--host',   default='220.67.219.55')
+ap.add_argument('--deputy', default='deputy_formation',
+                choices=('deputy_formation', 'deputy_docking'))
 args = ap.parse_args()
 
 client = roslibpy.Ros(host=args.host, port=9090)
@@ -66,7 +70,7 @@ rw_z = roslibpy.Topic(client, f'/{args.deputy}/rw/z/cmd', 'std_msgs/Float32')
 
 
 def send_rw(x=0.0, y=0.0, z=0.0):
-    """3축 RW 토크 명령 전송 (N·m). max ±0.01."""
+    """3축 RW 토크 명령 전송 (N·m). plugin clamp ±0.1."""
     rw_x.publish(roslibpy.Message({'data': float(x)}))
     rw_y.publish(roslibpy.Message({'data': float(y)}))
     rw_z.publish(roslibpy.Message({'data': float(z)}))
@@ -89,14 +93,14 @@ def send_rw(x=0.0, y=0.0, z=0.0):
 #    q_err = quat_multiply(quat_conj(q_target), q_measured)
 #    theta = 2 * [q_err.x, q_err.y, q_err.z]  # 라디안
 #
-# 4. PD 제어
-#    Kp = 0.001  # 비례 게인 (N·m/rad)
-#    Kd = 0.0005 # 미분 게인 (N·m/(rad/s))
+# 4. PD 제어 (100 kg 위성, Ixx=Iyy=14, Izz=10 kg·m² 기준 초기값)
+#    Kp = 2.0    # 비례 게인 (N·m/rad), max_torque=0.1 이라 작은 오차에도 포화 주의
+#    Kd = 5.0    # 미분 게인 (N·m/(rad/s))
 #    gyro = state['gyro']
 #    tau_x = -Kp * theta[0] - Kd * gyro[0]
 #    tau_y = -Kp * theta[1] - Kd * gyro[1]
 #    tau_z = -Kp * theta[2] - Kd * gyro[2]
-#    send_rw(tau_x, tau_y, tau_z)
+#    send_rw(tau_x, tau_y, tau_z)    # plugin 이 ±0.1 clamp 적용
 #
 # 5. 추력 감지 (가속도계)
 #    accel = state['accel']
