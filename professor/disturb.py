@@ -133,10 +133,14 @@ def mode_teleport_chief(client, args):
     print()
     print(f'  gz service -s /world/mission/set_pose \\')
     print(f'    --reqtype gz.msgs.Pose --reptype gz.msgs.Boolean --timeout 1000 \\')
-    print(f'    --req \'name: "intel_sat_dummy", '
+    print(f'    --req \'name: "chief", '
           f'position: {{x: {ox}, y: {oy}, z: {oz}}}\'')
     print()
-    print('  또는 Python 에서 roslibpy Service 로 호출 가능하면 여기서 자동화.')
+    print('  caveat: chief 의 Gazebo pose 만 이동. chief_propagator 는 SGP4 로')
+    print('  독립 전파하므로 /chief/eci_state 와 /chief/eci_truth 는 영향 없음.')
+    print('  → Navigation 이 "TLE 점프" 로 감지 불가 (visual/obs 카메라만 변함).')
+    print('  TLE 에 진짜 이상을 주려면 chief_propagator 의 노이즈 파라미터를')
+    print('  runtime 에 상향 (별도 기능, 미구현).')
 
 
 def mode_actuator_jam(client, args):

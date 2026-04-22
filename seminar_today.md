@@ -8,7 +8,7 @@
 
 **시뮬레이션**
 - 플랫샛 Gazebo + `mission.sdf` 상시 실행 (교수님 or 조교가 기동)
-- chief: `intel_sat_dummy` 원점 고정 (SSO 545 km 궤도의 LVLH 원점으로 간주)
+- chief: 모델 `chief` (`intel_sat_dummy` mesh 사용) 원점 고정, SSO 545 km 궤도의 LVLH 원점
 - deputy 2대: 동일한 100 kg 위성, 외관/센서 구성 완전 통일
   - `deputy_formation` 초기 위치 `(0, +5000, 0)` m
   - `deputy_docking`  초기 위치 `(0, −5000, 0)` m
@@ -80,7 +80,7 @@ ros2 topic list | head -20
 # 위성 위치 즉시 조회
 gz model -m deputy_formation --pose
 gz model -m deputy_docking --pose
-gz model -m intel_sat_dummy --pose
+gz model -m chief --pose
 
 # 긴급 정리
 bash ~/Controla_ROS2_lec/kill_sim.sh

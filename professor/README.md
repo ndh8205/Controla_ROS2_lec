@@ -38,14 +38,19 @@ python3 professor/disturb.py --mode random-thrust --target deputy_docking \
 
 ### 2. HARD 단계 (30분차 이후, 팀이 자만할 때쯤)
 
-**Chief 텔레포트 (TLE 신뢰 무너뜨리기)**
+**Chief 텔레포트 (시각적 교란만)**
 ```bash
 python3 professor/disturb.py --mode teleport-chief --offset 300 200 50
 ```
-- Chief 위치가 순간 이동 → TLE 추정치와 실제 크게 차이
-- Navigation 팀의 TLE 건전성 모니터가 감지해야 함
-- Vision 팀이 카메라로 재탐색 필요
-- ⚠ **이 모드는 서버 쪽 쉘에서 직접 `gz service` 호출 필요** — 스크립트가 정확한 명령을 출력해주니 복붙.
+- Chief 의 **Gazebo 모델 pose** 만 순간이동
+- ⚠ **`chief_propagator` 는 SGP4 로 독립 전파**하므로 `/chief/eci_state`,
+  `/chief/eci_truth` 는 영향 없음. → Navigation 의 TLE 기반 계산은 정상,
+  GPS 로 본 상대벡터도 변화 없음.
+- 실제 영향: **Observer 카메라 (`/observer/chief/camera` 등) 의 시야만**
+  변함. Vision 팀이 "chief 가 화면에서 사라졌다!" 로 감지.
+- 이 모드는 서버 쪽 쉘에서 `gz service` 직접 호출 필요 — 스크립트가 명령 출력.
+- 진짜 TLE 교란은 chief_propagator 의 `tle_pos_sigma`/`tle_vel_sigma` 파라미터를
+  runtime 에 상향 조정하는 별도 기능이 필요 (미구현, 향후 추가).
 
 **액추에이터 간섭 (통신 교란 시나리오)**
 ```bash
