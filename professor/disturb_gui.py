@@ -84,19 +84,19 @@ class DisturbGUI:
         self.tle_last_state = None  # 마지막으로 수신한 진짜 /chief/eci_state
         self.tle_last_pub = 0.0
 
-        self._build_root()
+        # 순서 중요 — 폰트는 위젯 생성 전에 적용해야 ttk 위젯에도 반영됨
+        self.root = tk.Tk()
+        self.root.title(f'Professor Disturb Console — {self.host}:9090')
+        self.root.geometry('620x820')
         self._apply_fonts()
+        self._build_widgets()
         self._connect_async()
         # tick 루프는 반드시 메인 스레드에서 시작 (tkinter after 는 thread-unsafe).
         # 연결 전에도 tick 이 돌아야 연결 완료 즉시 publish 가능.
         self.root.after(100, self._schedule_tick)
 
     # --------- UI ---------
-    def _build_root(self):
-        self.root = tk.Tk()
-        self.root.title(f'Professor Disturb Console — {self.host}:9090')
-        self.root.geometry('620x820')
-
+    def _build_widgets(self):
         self.target     = tk.StringVar(value='deputy_formation')
         self.throttle   = tk.DoubleVar(value=0.5)
         self.torque     = tk.DoubleVar(value=0.05)
@@ -177,23 +177,52 @@ class DisturbGUI:
         self.root.protocol('WM_DELETE_WINDOW', self._on_close)
 
     def _apply_fonts(self):
-        """한글·특수문자 렌더링 가능한 글꼴 자동 선택."""
+        """한글·특수문자 렌더링 가능한 글꼴 자동 선택 + 3 경로 모두 적용.
+
+        tkinter 폰트 시스템은 3 경로가 따로 있음:
+          1) 이름있는 폰트 (TkDefaultFont 등) — 일반 tk 위젯의 기본
+          2) option_add('*Font', ...) — tk 위젯의 저수준 기본
+          3) ttk.Style().configure('.', font=...) — ttk 위젯
+        한글이 박스로 보이는 건 ttk 위젯이 CJK 없는 폰트를 쓸 때 발생.
+        세 경로 모두 바꿔야 LabelFrame 제목·라벨 등이 전부 한글 지원 폰트로.
+        """
         fam = _pick_font(_KOREAN_FONT_CANDIDATES, None)
         fixed = _pick_font(_FIXED_FONT_CANDIDATES, None)
-        for name in ('TkDefaultFont', 'TkTextFont', 'TkMenuFont',
-                     'TkHeadingFont', 'TkCaptionFont'):
-            try:
-                f = tkfont.nametofont(name)
-                if fam:
-                    f.configure(family=fam)
-            except Exception:
-                pass
+        size = 10
+
+        if fam:
+            # (1) 이름있는 폰트들
+            for name in ('TkDefaultFont', 'TkTextFont', 'TkMenuFont',
+                         'TkHeadingFont', 'TkCaptionFont',
+                         'TkSmallCaptionFont', 'TkIconFont', 'TkTooltipFont'):
+                try:
+                    tkfont.nametofont(name).configure(family=fam, size=size)
+                except Exception:
+                    pass
+            # (2) tk 위젯 option DB
+            self.root.option_add('*Font', (fam, size))
+            # (3) ttk 위젯 스타일 — '.' 는 모든 ttk 기본
+            style = ttk.Style()
+            style.configure('.',               font=(fam, size))
+            style.configure('TLabel',          font=(fam, size))
+            style.configure('TButton',         font=(fam, size))
+            style.configure('TRadiobutton',    font=(fam, size))
+            style.configure('TCheckbutton',    font=(fam, size))
+            style.configure('TLabelframe.Label', font=(fam, size, 'bold'))
+            style.configure('TCombobox',       font=(fam, size))
+
         if fixed:
             try:
-                tkfont.nametofont('TkFixedFont').configure(family=fixed)
+                tkfont.nametofont('TkFixedFont').configure(family=fixed,
+                                                           size=max(9, size-1))
             except Exception:
                 pass
-        self._log(f'fonts: default={fam or "system"}  fixed={fixed or "system"}')
+
+        # 디버그용 폰트 목록 일부 로그
+        available = sorted(tkfont.families())
+        has_korean = [f for f in available if f in _KOREAN_FONT_CANDIDATES]
+        print(f'[disturb_gui] picked default={fam} fixed={fixed}')
+        print(f'[disturb_gui] Korean fonts available: {has_korean}')
 
     def _slider_row(self, parent, label, var, lo, hi, row, fmt):
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky='w', padx=4)
