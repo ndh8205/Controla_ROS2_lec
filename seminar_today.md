@@ -111,9 +111,11 @@ python3 student/navigation.py          --host 220.67.219.55 --deputy deputy_dock
 http://220.67.219.55:8080/                                                           # 전체 목록
 http://220.67.219.55:8080/stream_viewer?topic=/nasa_satellite/camera&type=mjpeg      # Formation 탑재
 http://220.67.219.55:8080/stream_viewer?topic=/nasa_satellite2/camera&type=mjpeg     # Docking 탑재
-http://220.67.219.55:8080/stream_viewer?topic=/observer/chief/camera&type=mjpeg      # Chief 외부
-http://220.67.219.55:8080/stream_viewer?topic=/observer/formation/camera&type=mjpeg  # Formation deputy 외부
-http://220.67.219.55:8080/stream_viewer?topic=/observer/docking/camera&type=mjpeg    # Docking deputy 외부
+http://220.67.219.55:8080/stream_viewer?topic=/observer/chief/camera&type=mjpeg      # Chief 외부 (정적)
+http://220.67.219.55:8080/stream_viewer?topic=/observer/formation/camera&type=mjpeg  # Formation 외부 (정적)
+http://220.67.219.55:8080/stream_viewer?topic=/observer/docking/camera&type=mjpeg    # Docking 외부 (정적)
+http://220.67.219.55:8080/stream_viewer?topic=/chase/formation/camera&type=mjpeg     # Formation chase (body-rigid follower)
+http://220.67.219.55:8080/stream_viewer?topic=/chase/docking/camera&type=mjpeg       # Docking chase (body-rigid follower)
 ```
 
 ### 교수님 방해 도구 → `professor/README.md` 참조
