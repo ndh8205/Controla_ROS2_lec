@@ -18,8 +18,10 @@
 """
 import argparse
 import base64
+import sys
 import time
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import ttk, scrolledtext
 import threading
 
@@ -27,6 +29,32 @@ try:
     import roslibpy
 except ImportError as e:
     raise SystemExit('roslibpy 필요: pip3 install roslibpy --break-system-packages')
+
+
+# 한글·특수문자 렌더링 가능한 폰트. OS 별 우선순위.
+_KOREAN_FONT_CANDIDATES = [
+    'Malgun Gothic',        # Windows 기본 한글 글꼴
+    'Noto Sans CJK KR',     # Linux (fonts-noto-cjk)
+    'NanumGothic',          # Linux (fonts-nanum)
+    'Apple SD Gothic Neo',  # macOS
+    'AppleGothic',          # macOS fallback
+    'Gulim', 'Dotum',       # Windows legacy
+]
+_FIXED_FONT_CANDIDATES = [
+    'Consolas',             # Windows
+    'Noto Sans Mono CJK KR',
+    'D2Coding', 'NanumGothicCoding',
+    'DejaVu Sans Mono',     # Linux
+    'Menlo',                # macOS
+]
+
+
+def _pick_font(candidates, fallback):
+    families = set(tkfont.families())
+    for name in candidates:
+        if name in families:
+            return name
+    return fallback
 
 
 AXES_TH  = ('fx_plus', 'fx_minus', 'fy_plus', 'fy_minus', 'fz_plus', 'fz_minus')
@@ -57,13 +85,17 @@ class DisturbGUI:
         self.tle_last_pub = 0.0
 
         self._build_root()
+        self._apply_fonts()
         self._connect_async()
+        # tick 루프는 반드시 메인 스레드에서 시작 (tkinter after 는 thread-unsafe).
+        # 연결 전에도 tick 이 돌아야 연결 완료 즉시 publish 가능.
+        self.root.after(100, self._schedule_tick)
 
     # --------- UI ---------
     def _build_root(self):
         self.root = tk.Tk()
         self.root.title(f'Professor Disturb Console — {self.host}:9090')
-        self.root.geometry('560x780')
+        self.root.geometry('620x820')
 
         self.target     = tk.StringVar(value='deputy_formation')
         self.throttle   = tk.DoubleVar(value=0.5)
@@ -144,6 +176,25 @@ class DisturbGUI:
 
         self.root.protocol('WM_DELETE_WINDOW', self._on_close)
 
+    def _apply_fonts(self):
+        """한글·특수문자 렌더링 가능한 글꼴 자동 선택."""
+        fam = _pick_font(_KOREAN_FONT_CANDIDATES, None)
+        fixed = _pick_font(_FIXED_FONT_CANDIDATES, None)
+        for name in ('TkDefaultFont', 'TkTextFont', 'TkMenuFont',
+                     'TkHeadingFont', 'TkCaptionFont'):
+            try:
+                f = tkfont.nametofont(name)
+                if fam:
+                    f.configure(family=fam)
+            except Exception:
+                pass
+        if fixed:
+            try:
+                tkfont.nametofont('TkFixedFont').configure(family=fixed)
+            except Exception:
+                pass
+        self._log(f'fonts: default={fam or "system"}  fixed={fixed or "system"}')
+
     def _slider_row(self, parent, label, var, lo, hi, row, fmt):
         ttk.Label(parent, text=label).grid(row=row, column=0, sticky='w', padx=4)
         ttk.Scale(parent, variable=var, from_=lo, to=hi, orient='horizontal',
@@ -168,7 +219,6 @@ class DisturbGUI:
                 sub = roslibpy.Topic(self.client, '/chief/eci_state',
                                      'nav_msgs/Odometry')
                 sub.subscribe(self._on_chief_state)
-                self._schedule_tick()
             except Exception as e:
                 self.status.set(f'CONNECT FAIL: {e}')
                 self._log(f'connect fail: {e}')
@@ -344,9 +394,10 @@ class DisturbGUI:
         # actuator hold-to-fire republishing
         for topic, info in list(self.active.items()):
             try:
-                self._pub(topic).publish(roslibpy.Message({'data': float(info['value'])}))
-            except Exception:
-                pass
+                self._pub(topic).publish(
+                    roslibpy.Message({'data': float(info['value'])}))
+            except Exception as e:
+                self._log(f'pub err {topic}: {e}')
 
         now = time.time()
         # TLE noise
